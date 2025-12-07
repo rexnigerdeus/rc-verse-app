@@ -1,0 +1,96 @@
+{
+  "home": {
+    "greeting": "Hello, dear disciple",
+    "verseBio": "Your daily verse",
+    "startMeditation": "Start Meditating",
+    "signOut": "Sign Out"
+  },
+  "meditate": {
+    "selectDuration": "Select Duration",
+    "start": "Start",
+    "exit": "Exit",
+    "soundName": "For The King - Mytic Session",
+    "advice": "Close your eyes. Focus on your breath and let the sound guide you."
+  },
+  "history": {
+    "title": "Your Verse History",
+    "empty": "You have no verses in your history yet.",
+    "dateNotAvailable": "Date not available"
+  },
+  "login": {
+    "title": "Welcome Back",
+    "subtitle": "Sign in to continue",
+    "email": "Email",
+    "password": "Password",
+    "button": "Sign In",
+    "loading": "Signing In...",
+    "link": "Don't have an account? Sign Up"
+  },
+  "signUp": {
+    "title": "Create Account",
+    "subtitle": "Start your journey with us",
+    "confirmPassword": "Confirm Password",
+    "button": "Sign Up",
+    "loading": "Creating Account...",
+    "link": "Already have an account? Sign In",
+    "success": "Account created! Signing you in..."
+  },
+  "tabs": {
+    "dailyVerse": "Daily Verse",
+    "history": "History",
+    "contact": "Contact",
+    "visitations": "Visitations",
+    "prayers": "Prayers",
+    "bible": "Bible"
+  },
+  "bible": {
+    "selectVersion": "Select Version",
+    "selectBook": "Select Book",
+    "selectChapter": "Chapter",
+    "fetchVerse": "Get Verse",
+    "loading": "Loading...",
+    "error": "Could not load scripture. Please check your connection."
+  },
+  "prayers": {
+    "title": "My Prayer Requests",
+    "placeholder": "Write your prayer request here...",
+    "submit": "Submit",
+    "active": "Active Requests",
+    "answered": "Answered Prayers",
+    "markAsAnswered": "Mark as Answered",
+    "answeredOn": "Answered on"
+  },
+  "visitations": {
+    "title": "Visitation Times",
+    "intro": "Each moment of visitation is a spiritual door where God can visit and reposition your life.",
+    "transition": "Transition",
+    "sunrise": "Sunrise",
+    "fullDay": "Full Day",
+    "sunset": "Sunset",
+    "notificationTitle": "Time for Visitation",
+    "notificationBodyTransition": "It's the time of Transition. Take a moment to pray.",
+    "notificationBodySunrise": "It's the time of Sunrise. Take a moment to pray.",
+    "notificationBodyFullDay": "It's the time of Full Day. Take a moment to pray.",
+    "notificationBodySunset": "It's the time of Sunset. Take a moment to pray."
+  },
+  "contact": {
+    "title": "Contact & Info",
+    "intro": "We are REVIVAL CULTURE ABIDJAN, formerly Deeper Generation, we continue to work so that the sons and daughters of the kingdom live the life of heaven on earth in their role as ambassadors. We are always available for you. Below are our contacts.",
+    "email": "Email",
+    "whatsapp": "WhatsApp",
+    "website": "Website",
+    "location": "Location",
+    "facebook": "Facebook",
+    "tiktok": "TikTok"
+  },
+  "share": {
+    "message": "Shared from the Revival Culture Abidjan app."
+  },
+  "errors": {
+    "fetchVerse": "Could not fetch your daily verse.",
+    "findVerse": "Could not find a new verse for you.",
+    "login": "Login Error",
+    "signUp": "Sign-Up Error",
+    "missingFields": "Please enter both email and password."
+  }
+}

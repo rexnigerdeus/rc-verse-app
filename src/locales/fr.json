@@ -1,0 +1,96 @@
+{
+  "home": {
+    "greeting": "Bonjour, cher disciple",
+    "verseBio": "Ton verset du jour",
+    "startMeditation": "Commencer la Méditation",
+    "signOut": "Se Déconnecter"
+  },
+  "meditate": {
+    "selectDuration": "Choisir la Durée",
+    "start": "Commencer",
+    "exit": "Quitter",
+    "soundName": "For The King - Mytic Session",
+    "advice": "Fermez les yeux. Concentrez-vous sur votre souffle et laissez le son vous guider."
+  },
+  "history": {
+    "title": "Historique de Versets",
+    "empty": "Vous n'avez aucun verset dans votre historique.",
+    "dateNotAvailable": "Date non disponible"
+  },
+  "login": {
+    "title": "Bon Retour",
+    "subtitle": "Connectez-vous pour continuer",
+    "email": "Email",
+    "password": "Mot de passe",
+    "button": "Se Connecter",
+    "loading": "Connexion en cours...",
+    "link": "Pas de compte ? S'inscrire"
+  },
+  "signUp": {
+    "title": "Créer un Compte",
+    "subtitle": "Commencez votre parcours avec nous",
+    "confirmPassword": "Confirmez le mot de passe",
+    "button": "S'inscrire",
+    "loading": "Création du compte...",
+    "link": "Déjà un compte ? Se connecter",
+    "success": "Compte créé ! Connexion en cours..."
+  },
+  "tabs": {
+    "dailyVerse": "Verset du Jour",
+    "history": "Historique de versets",
+    "contact": "Contact",
+    "visitations": "Visites",
+    "prayers": "Prières",
+    "bible": "Bible"
+  },
+  "bible": {
+    "selectVersion": "Choisir la Version",
+    "selectBook": "Choisir le Livre",
+    "selectChapter": "Chapitre",
+    "fetchVerse": "Lire",
+    "loading": "Chargement...",
+    "error": "Impossible de charger le texte. Vérifiez votre connexion."
+  },
+  "prayers": {
+    "title": "Mes Sujets de Prière",
+    "placeholder": "Écrivez votre sujet de prière ici...",
+    "submit": "Soumettre",
+    "active": "Sujets Actifs",
+    "answered": "Prières Exaucées",
+    "markAsAnswered": "Marquer comme Exaucée",
+    "answeredOn": "Exaucée le"
+  },
+  "visitations": {
+    "title": "Moments de visitation",
+    "intro": "Chaque moment de visite est une porte spirituelle où Dieu peut visiter et repositionner votre vie.",
+    "transition": "Transition",
+    "sunrise": "Lever du soleil",
+    "fullDay": "Pleine journée",
+    "sunset": "Coucher du soleil",
+    "notificationTitle": "Moment de visitation",
+    "notificationBodyTransition": "C'est l'heure de la Transition. Prenez un moment pour prier.",
+    "notificationBodySunrise": "C'est l'heure du Lever du soleil. Prenez un moment pour prier.",
+    "notificationBodyFullDay": "C'est l'heure du Midi. Prenez un moment pour prier.",
+    "notificationBodySunset": "C'est l'heure du Coucher du soleil. Prenez un moment pour prier."
+  },
+  "contact": {
+    "title": "Contact & Infos",
+    "intro": "Nous sommes REVIVAL CULTURE ABIDJAN, auparavant Deeper Generation, nous continuons à travailler pour que les fils et filles du royaume vivent la vie du ciel sur la terre dans leur fonction d'ambassadeurs. Nous sommes toujours disponible pour vous. Ci-dessous nos contacts.",
+    "email": "Email",
+    "whatsapp": "WhatsApp",
+    "website": "Site Web",
+    "location": "Localisation",
+    "facebook": "Facebook",
+    "tiktok": "TikTok"
+  },
+  "share": {
+    "message": "Partagé depuis l'application Revival Culture Abidjan."
+  },
+  "errors": {
+    "fetchVerse": "Impossible de récupérer votre verset du jour.",
+    "findVerse": "Impossible de trouver un nouveau verset pour vous.",
+    "login": "Erreur de Connexion",
+    "signUp": "Erreur d'Inscription",
+    "missingFields": "Veuillez saisir votre email et votre mot de passe."
+  }
+}

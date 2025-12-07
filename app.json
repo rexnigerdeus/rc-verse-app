@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "rc-verse-app",
+    "slug": "rc-verse-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "rcverseapp",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#161A30"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#161A30"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.rexnigerdeus.rcverseapp"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png",
+      "name": "Revival Culture",
+      "shortName": "Revival",
+      "lang": "fr",
+      "themeColor": "#161A30",
+      "backgroundColor": "#161A30",
+      "display": "standalone",
+      "startUrl": "/",
+      "description": "Daily Verse & Meditation App",
+      "orientation": "portrait"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-localization",
+      "expo-font",
+      "expo-sqlite"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9d5ee9e0-0561-4264-8b9d-520ae3e8a4a8"
+      }
+    }
+  }
+}

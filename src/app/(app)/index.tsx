@@ -1,7 +1,8 @@
 // src/app/(app)/index.tsx
 
 import { Feather } from "@expo/vector-icons";
-import { Link } from "expo-router";
+import AsyncStorage from '@react-native-async-storage/async-storage'; // Import Storage
+import { Link, useRouter } from "expo-router";
 import { MotiView } from "moti";
 import { useEffect, useState } from "react";
 import {
@@ -14,7 +15,8 @@ import {
   StyleSheet,
   Text,
   View,
-} from "react-native"; // NEW: Import Share and Alert
+  Platform
+} from "react-native";
 import BrandLogo from "../../components/BrandLogo";
 import { Colors } from "../../constants/colors";
 import i18n from "../../lib/i18n";
@@ -24,110 +26,112 @@ import { Database } from "../../types/database.types";
 
 type Verse = Database["public"]["Tables"]["verses"]["Row"];
 
+const STORAGE_KEY_VERSE = 'revival_daily_verse_data_v2';
+const STORAGE_KEY_DATE = 'revival_daily_verse_date_v2';
+
 export default function HomeScreen() {
   const { user } = useAuth();
   const [verse, setVerse] = useState<Verse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // NEW: Function to handle sharing the verse
-  const handleShare = async () => {
-    if (!verse) return;
-
-    try {
-      const message = `"${verse.text}"\n- ${verse.book} ${verse.chapter}:${
-        verse.verse_number
-      }\n\n${i18n.t("share.message")}`;
-
-      await Share.share({
-        message: message,
-      });
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
-    }
+  // Helper to get today's date string (YYYY-MM-DD)
+  const getTodayDateString = () => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
-  async function handleLogout() {
-    await supabase.auth.signOut();
-  }
-
-  // ... (useEffect and fetchDailyVerse logic remains the same)
   useEffect(() => {
     if (!user) return;
 
-    const fetchDailyVerse = async () => {
+    const loadDailyVerse = async () => {
       setIsLoading(true);
       setError(null);
+      const today = getTodayDateString();
 
-      // --- NEW: Timezone-safe date creation ---
-      // This creates a 'YYYY-MM-DD' string based on the user's local date, not UTC.
-      const localDate = new Date();
-      const today = `${localDate.getFullYear()}-${String(
-        localDate.getMonth() + 1
-      ).padStart(2, "0")}-${String(localDate.getDate()).padStart(2, "0")}`;
-      // --- END NEW ---
+      try {
+        // 1. FIRST: Check Local Storage (The Cache)
+        const storedDate = await AsyncStorage.getItem(STORAGE_KEY_DATE);
+        const storedVerseString = await AsyncStorage.getItem(STORAGE_KEY_VERSE);
 
-      const { data: historyData, error: historyError } = await supabase
-        .from("verse_history")
-        .select("*, verses(*)")
-        .eq("user_id", user.id)
-        .eq("viewed_on", today)
-        .single();
+        if (storedDate === today && storedVerseString) {
+          // Found valid cache for today! Use it.
+          console.log("Using cached verse for today");
+          setVerse(JSON.parse(storedVerseString));
+          setIsLoading(false);
+          return; 
+        }
 
-      if (historyError && historyError.code !== "PGRST116") {
-        console.error("Error fetching history:", historyError);
-        setError(i18n.t("errors.fetchVerse"));
-        setIsLoading(false);
-        return;
-      }
+        // 2. SECOND: If cache empty/old, fetch from Supabase
+        console.log("Fetching new verse from Supabase...");
+        
+        // A. Try fetching from Verse History first (Server-side persistence)
+        const { data: historyData } = await supabase
+          .from("verse_history")
+          .select("*, verses(*)")
+          .eq("user_id", user.id)
+          .eq("viewed_on", today)
+          .single();
 
-      if (historyData && historyData.verses) {
-        setVerse(historyData.verses as Verse);
-        setIsLoading(false);
-        return;
-      }
+        if (historyData && historyData.verses) {
+           const verseFromHistory = historyData.verses as Verse;
+           await saveToCache(today, verseFromHistory);
+           return;
+        }
 
-      const { data: randomVerse, error: rpcError } = await supabase.rpc(
-        "get_random_verse"
-      );
+        // B. If no history, get a Random Verse
+        const { data: randomVerse, error: rpcError } = await supabase.rpc("get_random_verse");
 
-      if (rpcError || !randomVerse || randomVerse.length === 0) {
-        console.error("Error fetching random verse:", rpcError);
-        setError(i18n.t("errors.findVerse"));
-        setIsLoading(false);
-        return;
-      }
+        if (rpcError || !randomVerse || randomVerse.length === 0) {
+          throw new Error(i18n.t("errors.findVerse"));
+        }
 
-      const newVerse = randomVerse[0];
-      setVerse(newVerse);
+        const newVerse = randomVerse[0];
 
-      const { error: insertError } = await supabase
-        .from("verse_history")
-        .insert({
+        // C. Save to History (DB) so it syncs across devices
+        await supabase.from("verse_history").insert({
           user_id: user.id,
           verse_id: newVerse.id,
           viewed_on: today,
         });
 
-      // --- NEW: Visible error handling for the save action ---
-      if (insertError) {
-        console.error("Error saving verse to history:", insertError);
-        Alert.alert(
-          "Erreur",
-          "Impossible de sauvegarder le verset dans votre historique."
-        );
-      }
-      // --- END NEW ---
+        // D. Save to Cache (Local) for PWA stability
+        await saveToCache(today, newVerse);
 
-      setIsLoading(false);
+      } catch (err: any) {
+        console.error("Error loading verse:", err);
+        setError(i18n.t("errors.fetchVerse"));
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    fetchDailyVerse();
+    loadDailyVerse();
   }, [user]);
+
+  const saveToCache = async (date: string, verseToSave: Verse) => {
+    setVerse(verseToSave);
+    await AsyncStorage.setItem(STORAGE_KEY_DATE, date);
+    await AsyncStorage.setItem(STORAGE_KEY_VERSE, JSON.stringify(verseToSave));
+  };
+
+  const handleShare = async () => {
+    if (!verse) return;
+    try {
+      const message = `"${verse.text}"\n- ${verse.book} ${verse.chapter}:${verse.verse_number}\n\n${i18n.t("share.message")}`;
+      if (Platform.OS === 'web' && navigator.share) {
+         await navigator.share({ title: 'Revival Culture', text: message });
+      } else {
+         await Share.share({ message: message });
+      }
+    } catch (error: any) {
+       // Ignore abort errors
+    }
+  };
 
   const renderContent = () => {
     if (isLoading) {
-      return <ActivityIndicator size="large" color={Colors.text} />;
+      return <ActivityIndicator size="large" color={Colors.text} style={{marginTop: 50}} />;
     }
     if (error) {
       return <Text style={styles.errorText}>{error}</Text>;
@@ -151,10 +155,10 @@ export default function HomeScreen() {
                   pressed && { opacity: 0.7 },
                 ]}
               >
-                <Feather name="share" size={20} color={Colors.text} />
+                <Feather name="share-2" size={20} color={Colors.accent} />
               </Pressable>
               <Text style={styles.referenceText}>
-                - {verse.book} {verse.chapter}:{verse.verse_number}
+                {verse.book} {verse.chapter}:{verse.verse_number}
               </Text>
             </View>
           </MotiView>
@@ -166,18 +170,24 @@ export default function HomeScreen() {
             animate={{ opacity: 1, translateY: 0 }}
             transition={{ type: "timing", duration: 800, delay: 200 }}
           >
-            <Link href="/meditate" asChild>
+            <Link 
+                href={{
+                    pathname: "/meditate",
+                    params: { verse: JSON.stringify(verse) }
+                }} 
+                asChild
+            >
               <Pressable
                 style={({ pressed }) => [
                   styles.meditateButton,
-                  pressed && { opacity: 0.8 },
+                  pressed && { opacity: 0.9 },
                 ]}
               >
                 <Feather
                   name="play-circle"
-                  size={28}
+                  size={24}
                   color={Colors.text}
-                  style={{ marginRight: 10, paddingBottom: 8}}
+                  style={{ marginRight: 10}}
                 />
                 <Text style={styles.meditateButtonText}>
                   {i18n.t("home.startMeditation")}
@@ -193,27 +203,13 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={require("../../assets/images/noise.png")}
-        resizeMode="cover"
-        style={styles.noiseBackground}
-        imageStyle={{ opacity: 0.1 }}
-      >
+      {/* Background Image is commented out for cleaner Dark Mode look, un-comment if needed */}
+      {/* <ImageBackground source={require("../../assets/images/noise.png")} ... > */}
+      
         <ScrollView contentContainerStyle={styles.contentWrapper}>
           <View style={styles.header}>
             <BrandLogo />
-            {/* LOG OUT BUTTON COMMENT */}
-            {/* <Pressable
-              onPress={handleLogout}
-              style={({ pressed }) => [
-                styles.logoutButton,
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <Text style={styles.logoutButtonText}>
-                {i18n.t("home.signOut")}
-              </Text>
-            </Pressable> */}
+            {/* Header Controls (Logout, etc) can go here */}
           </View>
 
           <Text style={styles.greetingText}>{i18n.t("home.greeting")}</Text>
@@ -229,39 +225,38 @@ export default function HomeScreen() {
 
           {renderContent()}
         </ScrollView>
-      </ImageBackground>
+      {/* </ImageBackground> */}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.primary },
-  noiseBackground: { flex: 1 },
   contentWrapper: { flexGrow: 1, padding: 20, alignItems: 'center' },
   header: {
     width: '100%',
     alignItems: 'center',
     marginTop: 40,
-    marginBottom: 20,
+    marginBottom: 30,
   },
   greetingText: {
-    fontFamily: 'Brand_Heading', // Serif for greeting
+    fontFamily: 'Brand_Heading', 
     fontSize: 28,
-    color: Colors.accent, // Abidjan Clay for warmth
+    color: Colors.accent, 
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 10,
   },
   card: {
     width: '100%',
-    backgroundColor: 'rgba(0,0,0,0.2)', // Darker, cozy overlay
+    backgroundColor: 'rgba(0,0,0,0.2)', 
     borderWidth: 1,
-    borderColor: 'rgba(244, 241, 234, 0.1)', // Subtle cream border
+    borderColor: 'rgba(244, 241, 234, 0.1)', 
     borderRadius: 15,
     padding: 30,
-    marginBottom: 20,
+    marginBottom: 30,
   },
   verseText: {
-    fontFamily: 'Brand_Heading', // Serif for the Word
+    fontFamily: 'Brand_Heading', 
     fontSize: 24,
     color: Colors.text,
     textAlign: 'center',
@@ -270,65 +265,60 @@ const styles = StyleSheet.create({
   },
   verseBio: {
     fontFamily: 'Brand_Body',
-    fontSize: 17,
-    color: Colors.text,
+    fontSize: 16,
+    color: 'rgba(244, 241, 234, 0.6)',
     textAlign: "center",
-    marginBottom: 15,
+    marginBottom: 20,
+    lineHeight: 24,
   },
   referenceText: {
     fontFamily: 'Brand_Body_Bold',
     fontSize: 14,
-    color: Colors.accent, // Abidjan Clay for reference
+    color: Colors.accent, 
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
   referenceContainer: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'center', // Centered reference
     alignItems: 'center',
     marginTop: 10,
+    position: 'relative',
+    width: '100%',
   },
-  shareButton: { padding: 5, marginRight: 10 },
+  shareButton: { 
+    position: 'absolute',
+    right: 0,
+    padding: 10, 
+  },
   meditateButton: {
-    backgroundColor: Colors.accent, // Abidjan Clay button
+    backgroundColor: Colors.accent, 
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 18,
+    paddingVertical: 18,
     borderRadius: 30,
     width: '100%',
   },
   meditateButtonText: {
     fontFamily: 'Brand_Body_Bold',
-    color: Colors.text, // Cream text on Clay button
+    color: Colors.text, 
     fontSize: 16,
     letterSpacing: 0.5,
-  },
-  logoutButton: {
-    backgroundColor: 'rgba(244, 241, 234, 0.1)',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  logoutButtonText: {
-    fontFamily: 'Brand_Body',
-    color: Colors.text,
-    fontSize: 12,
   },
   errorText: { color: Colors.accent, fontSize: 16, textAlign: 'center' },
   historyLinkButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginBottom: 20, // Add space below
+    padding: 10,
+    marginBottom: 20,
+    opacity: 0.7
   },
   historyLinkText: {
     fontFamily: 'Brand_Body',
     color: Colors.text,
     fontSize: 14,
     marginLeft: 8,
+    textDecorationLine: 'underline'
   },
 });

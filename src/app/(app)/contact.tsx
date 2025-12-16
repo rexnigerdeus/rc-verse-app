@@ -16,6 +16,7 @@ import { FontAwesome5 } from "@expo/vector-icons";
 
 // Data for our contact grid. This makes it easy to add or remove items.
 const contactItems = [
+  { key: 'donation', icon: 'hand-holding-heart', url: 'tel:+2250778554483', labelOverride: "Faire un don" },
   {
     key: "whatsapp",
     icon: "whatsapp",
@@ -51,24 +52,51 @@ const contactItems = [
 // This is the new component for each box in the grid
 const InfoBox = ({ item }: { item: (typeof contactItems)[0] }) => {
   const handlePress = async () => {
+    // Special handler for Donation
+    if (item.key === 'donation') {
+        Alert.alert(
+            "Soutenir l'œuvre",
+            "Vous pouvez faire un don via Mobile Money au numéro suivant :\n\n+225 07 78 55 44 83\n\nMerci de bénir ce projet !",
+            [
+                { text: "Copier le numéro", onPress: () => {
+                    // If you have Clipboard installed, use it. 
+                    // Otherwise, just open dialer
+                    Linking.openURL('tel:+2250778554483');
+                }},
+                { text: "Fermer", style: "cancel" }
+            ]
+        );
+        return;
+    }
+
+    // Standard handler for others
     try {
       const supported = await Linking.canOpenURL(item.url);
       if (supported) {
         await Linking.openURL(item.url);
       } else {
-        Alert.alert(`Don't know how to open this URL: ${item.url}`);
+        Alert.alert(`Impossible d'ouvrir: ${item.url}`);
       }
     } catch (error) {
-      Alert.alert("An error occurred");
+      Alert.alert("Erreur");
     }
   };
 
+  // Special style for donation box
+  const isDonation = item.key === 'donation';
+
   return (
-    <Pressable style={styles.boxContainer} onPress={handlePress}>
-      <View style={styles.iconOutline}>
-        <FontAwesome5 name={item.icon} size={30} color={Colors.accent} />
+    <Pressable style={({pressed}) => [
+            styles.boxContainer, 
+            pressed && {opacity: 0.7},
+            isDonation && styles.donationBox // Apply special style
+        ]} onPress={handlePress}>
+      <View style={[styles.iconOutline, isDonation && styles.donationIcon]}>
+        <FontAwesome5 name={item.icon} size={28} color={isDonation ? Colors.primary : Colors.accent} />
       </View>
-      <Text style={styles.boxLabel}>{i18n.t(`contact.${item.key}`)}</Text>
+      <Text style={[styles.boxLabel, isDonation && styles.donationText]}>
+          {item.labelOverride || i18n.t(`contact.${item.key}`)}
+      </Text>
     </Pressable>
   );
 };
@@ -152,4 +180,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textAlign: 'center',
   },
+  donationBox: {
+        backgroundColor: Colors.accent, // Abidjan Clay background
+        borderColor: Colors.accent,
+    },
+    donationIcon: {
+        backgroundColor: 'rgba(255,255,255,0.2)', // Light background for icon
+    },
+    donationText: {
+        color: Colors.primary, // Dark text on the clay button
+        fontWeight: 'bold',
+    }
 });

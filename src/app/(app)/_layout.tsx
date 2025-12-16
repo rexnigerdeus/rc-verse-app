@@ -70,9 +70,10 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="bible" // Use the filename 'bible.tsx'
+        name="bible" 
         options={{
           title: i18n.t("tabs.bible"),
+          href: null,
           tabBarIcon: ({ color }) => <TabBarIcon name="book" color={color} />, // Example icon
         }}
       />

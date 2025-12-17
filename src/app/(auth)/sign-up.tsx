@@ -1,166 +1,152 @@
-// src/app/(auth)/sign-up.tsx
-
-import { Link } from "expo-router";
-import { useState } from "react";
-import {
-  Alert,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import BrandLogo from "../../components/BrandLogo";
-import { Colors } from "../../constants/colors";
-import i18n from "../../lib/i18n";
-import { supabase } from "../../lib/supabase";
+import React, { useState } from 'react';
+import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import { supabase } from '../../lib/supabase';
+import { Colors } from '../../constants/colors';
+import { useRouter, Link } from 'expo-router';
 
 export default function SignUpScreen() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState(""); // NEW state
-  const [loading, setLoading] = useState(false);
+    const [name, setName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const router = useRouter();
 
-  async function handleSignUp() {
-    // NEW: Validation check
-    if (password !== confirmPassword) {
-      Alert.alert("Erreur", "Les mots de passe ne correspondent pas.");
-      return;
-    }
+    // Helper to ensure alerts work on Web and Mobile
+    const showAlert = (title: string, message: string) => {
+        if (Platform.OS === 'web') {
+            window.alert(`${title}: ${message}`);
+        } else {
+            Alert.alert(title, message);
+        }
+    };
 
-    setLoading(true);
-    try {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-      if (signUpError) throw signUpError;
+    const handleSignUp = async () => {
+        console.log("Button pressed!"); // DEBUG LOG 1
+        console.log("Form Data:", { name, phone, password }); // DEBUG LOG 2
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (signInError) throw signInError;
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
-    } finally {
-      setLoading(false);
-    }
-  }
+        if (!name || !phone || !password) {
+            console.log("Validation failed: Missing fields");
+            showAlert('Erreur', 'Veuillez remplir tous les champs.');
+            return;
+        }
 
-  return (
-    <View style={styles.container}>
-      <View style={{ marginBottom: 40 }}>
-        <BrandLogo />
-      </View>
-      <Text style={styles.title}>{i18n.t("signUp.title")}</Text>
-      <Text style={styles.subtitle}>{i18n.t("signUp.subtitle")}</Text>
+        // Clean phone number: remove spaces, dashes
+        const cleanPhone = phone.replace(/\s/g, '').replace(/-/g, '');
+        
+        // Create a "fake" email to satisfy Supabase Auth
+        const pseudoEmail = `${cleanPhone}@revival.culture`;
+        console.log("Attempting sign up with:", pseudoEmail); // DEBUG LOG 3
 
-      <TextInput
-        style={styles.input}
-        placeholder={i18n.t("login.email")}
-        placeholderTextColor="#888"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder={i18n.t("login.password")}
-        placeholderTextColor="#888"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      {/* NEW: Confirm Password Input */}
-      <TextInput
-        style={styles.input}
-        placeholder={i18n.t("signUp.confirmPassword")}
-        placeholderTextColor="#888"
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-        secureTextEntry
-      />
+        setLoading(true);
+        
+        try {
+            const { data, error } = await supabase.auth.signUp({
+                email: pseudoEmail,
+                password: password,
+                options: {
+                    data: {
+                        first_name: name,
+                        phone_number: cleanPhone,
+                    },
+                },
+            });
 
-      <Pressable
-        style={({ pressed }) => [
-          styles.button,
-          pressed && styles.buttonPressed,
-        ]}
-        onPress={handleSignUp}
-        disabled={loading}
-      >
-        <Text style={styles.buttonText}>
-          {loading ? i18n.t("signUp.loading") : i18n.t("signUp.button")}
-        </Text>
-      </Pressable>
+            if (error) {
+                console.error("Supabase Error:", error);
+                showAlert('Erreur', error.message);
+            } else {
+                console.log("Sign Up Success:", data);
+                showAlert('Succès', 'Compte créé avec succès !');
+                // The AuthProvider should handle the redirect now
+            }
+        } catch (err: any) {
+            console.error("Unexpected Error:", err);
+            showAlert('Erreur', err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-      <Link href="/(auth)/login" asChild>
-        <Pressable style={styles.linkButton}>
-          <Text style={styles.linkText}>{i18n.t("signUp.link")}</Text>
-        </Pressable>
-      </Link>
-    </View>
-  );
+    return (
+        <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.container}
+        >
+            <ScrollView contentContainerStyle={styles.scrollContent}>
+                <View style={styles.logoContainer}>
+                    <Text style={styles.brandTitle}>REVIVAL CULTURE</Text>
+                    <Text style={styles.brandSubtitle}>ABIDJAN</Text>
+                </View>
+
+                <View style={styles.formContainer}>
+                    <Text style={styles.header}>Créer un compte</Text>
+                    
+                    <Text style={styles.label}>Nom complet</Text>
+                    <TextInput 
+                        style={styles.input} 
+                        placeholder="Jean Kouassi" 
+                        placeholderTextColor="rgba(244, 241, 234, 0.5)"
+                        value={name}
+                        onChangeText={setName}
+                    />
+
+                    <Text style={styles.label}>Numéro de téléphone (WhatsApp)</Text>
+                    <TextInput 
+                        style={styles.input} 
+                        placeholder="07 07 07 07 07" 
+                        placeholderTextColor="rgba(244, 241, 234, 0.5)"
+                        value={phone}
+                        onChangeText={setPhone}
+                        keyboardType="phone-pad"
+                    />
+
+                    <Text style={styles.label}>Mot de passe</Text>
+                    <TextInput 
+                        style={styles.input} 
+                        placeholder="••••••" 
+                        placeholderTextColor="rgba(244, 241, 234, 0.5)"
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry
+                    />
+
+                    <Pressable 
+                        onPress={handleSignUp} 
+                        style={({pressed}) => [styles.button, pressed && {opacity: 0.8}]}
+                        disabled={loading}
+                    >
+                        {loading ? (
+                            <ActivityIndicator color={Colors.text} />
+                        ) : (
+                            <Text style={styles.buttonText}>S'inscrire</Text>
+                        )}
+                    </Pressable>
+
+                    <View style={styles.footer}>
+                      <Text style={styles.footerText}>Déjà un compte ? </Text>
+                      <Pressable onPress={() => router.replace('/login')}>
+                          <Text style={styles.linkText}>Se connecter</Text>
+                      </Pressable>
+                    </View>
+                </View>
+            </ScrollView>
+        </KeyboardAvoidingView>
+    );
 }
 
-// Use the same styles from login.tsx or copy them here
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    padding: 20,
-    backgroundColor: Colors.primary,
-  },
-  title: {
-    fontFamily: "Outfit_700Bold",
-    fontSize: 32,
-    color: Colors.text,
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontFamily: "Outfit_400Regular",
-    fontSize: 16,
-    color: "rgba(255, 255, 255, 0.7)",
-    textAlign: "center",
-    marginBottom: 40,
-  },
-  input: {
-    fontFamily: "Outfit_400Regular",
-    backgroundColor: "rgba(0,0,0,0.2)",
-    color: Colors.text,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    borderRadius: 8,
-    fontSize: 16,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  button: {
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  buttonPressed: {
-    opacity: 0.8,
-  },
-  buttonText: {
-    fontFamily: "Outfit_700Bold",
-    color: Colors.primary,
-    fontSize: 16,
-  },
-  linkButton: {
-    marginTop: 20,
-    alignItems: "center",
-  },
-  linkText: {
-    fontFamily: "Outfit_400Regular",
-    color: Colors.text,
-    fontSize: 14,
-  },
+    container: { flex: 1, backgroundColor: Colors.primary },
+    scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 20 },
+    logoContainer: { alignItems: 'center', marginBottom: 40 },
+    brandTitle: { fontFamily: 'Brand_Heading', fontSize: 32, color: Colors.text, letterSpacing: 2 },
+    brandSubtitle: { fontFamily: 'Brand_Body', fontSize: 14, color: Colors.accent, letterSpacing: 4, marginTop: 5 },
+    formContainer: { backgroundColor: 'rgba(0,0,0,0.2)', padding: 25, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(244, 241, 234, 0.1)' },
+    header: { fontFamily: 'Brand_Heading', fontSize: 24, color: Colors.text, textAlign: 'center', marginBottom: 25 },
+    label: { fontFamily: 'Brand_Body_Bold', color: Colors.accent, marginBottom: 8, fontSize: 14 },
+    input: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 15, color: Colors.text, fontFamily: 'Brand_Body', marginBottom: 20, borderWidth: 1, borderColor: 'rgba(244, 241, 234, 0.1)' },
+    button: { backgroundColor: Colors.accent, padding: 18, borderRadius: 30, alignItems: 'center', marginTop: 10 },
+    buttonText: { fontFamily: 'Brand_Body_Bold', color: Colors.text, fontSize: 16 },
+    footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
+    footerText: { color: 'rgba(244, 241, 234, 0.6)', fontFamily: 'Brand_Body' },
+    linkText: { color: Colors.highlight, fontFamily: 'Brand_Body_Bold' },
 });

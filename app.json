@@ -27,7 +27,7 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/favicon.png",
       "name": "Revival Culture",
       "shortName": "Revival",

@@ -70,6 +70,15 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
+        name="meditate"
+        options={{
+          title: "Méditation",
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon name="play-circle" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="bible" 
         options={{
           title: i18n.t("tabs.bible"),

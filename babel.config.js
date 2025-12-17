@@ -1,11 +1,10 @@
-// babel.config.js
 module.exports = function (api) {
   api.cache(true);
   return {
-    presets: ["babel-preset-expo"],
+    presets: ['babel-preset-expo'],
     plugins: [
-      // This plugin must be the last one in the array
-      "react-native-reanimated/plugin",
+      // Required for animations. MUST BE LAST.
+      'react-native-reanimated/plugin',
     ],
   };
 };

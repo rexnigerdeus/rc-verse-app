@@ -1,40 +1,69 @@
-// src/app/_layout.tsx
-import { Stack } from 'expo-router';
-import { AuthProvider } from '../providers/AuthProvider';
+import { Slot, useRouter, useSegments } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import { Colors } from '../constants/colors'; // Import colors
+import { AuthProvider, useAuth } from '../providers/AuthProvider';
+import { Colors } from '../constants/colors';
+import { router } from "expo-router";
 
+// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    // We map your brand names to the font files
-    'Brand_Heading': require('../../assets/fonts/TimesNewRomanMTCondensed-Bold.otf'), // Or TimesNewRoman.ttf
-    'Brand_Body': require('../../assets/fonts/NeueMontreal-Regular.otf'), // Or NeueMontreal.ttf
-    'Brand_Body_Bold': require('../../assets/fonts/NeueMontreal-Bold.otf'),
-    'Brand_Italic': require('../../assets/fonts/TimesNew RomanMTCondensed-Regular.otf'), 
+function InitialLayout() {
+  const { session, loading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  // 1. Load Fonts
+  const [fontsLoaded] = useFonts({
+    'Brand_Heading': require('../../assets/fonts/TimesNewRomanMTCondensed-Bold.otf'),
+    'Brand_Body': require('../../assets/fonts/NeueMontreal-Regular.otf'),
+    'Brand_Body_Bold': require('../../assets/fonts/NeueMontreal-Bold.otf'), 
   });
 
+  // 2. Hide Splash Screen
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    if (fontsLoaded) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded]);
 
-  if (!fontsLoaded && !fontError) {
-    return null;
+  // 3. TRAFFIC CONTROL (The Fix)
+  useEffect(() => {
+    if (loading) return; // Still checking session? Do nothing.
+
+    const inAuthGroup = segments[0] === '(auth)';
+    const inAppGroup = segments[0] === '(app)';
+
+    if (session && !inAppGroup) {
+      // CASE 1: Logged in, but NOT in the main app (e.g. on "/" or in "sign-in")
+      // Redirect to the meditation screen (a safe, known file)
+      router.replace('/(app)/meditate'); 
+    } else if (!session && !inAuthGroup) {
+      // CASE 2: Not logged in, and NOT in the auth group (e.g. on "/")
+      // Redirect to sign in
+      router.replace('/(auth)/login');
+    }
+  }, [session, loading, segments]);
+
+  // 4. Loading State
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.primary }}>
+        <ActivityIndicator size="large" color={Colors.accent} />
+      </View>
+    );
   }
 
+  // 5. Render
+  return <Slot />;
+}
+
+export default function RootLayout() {
   return (
     <AuthProvider>
-      <Stack screenOptions={{ 
-        headerShown: false,
-        contentStyle: { backgroundColor: Colors.primary } // Set global background
-      }}>
-        <Stack.Screen name="meditate" options={{ presentation: 'modal' }} />
-      </Stack>
+      <InitialLayout />
     </AuthProvider>
   );
 }

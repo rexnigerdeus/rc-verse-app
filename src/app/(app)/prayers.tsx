@@ -66,16 +66,21 @@ export default function PrayersScreen() {
   const handleSubmit = async () => {
     if (!user || newRequest.trim() === "") return;
     setLoading(true);
+
     const { error } = await supabase
       .from("prayer_requests")
-      .insert({ user_id: user.id, request_text: newRequest.trim() });
+      .insert({ 
+        user_id: user.id, 
+        request_text: newRequest.trim(),
+        email: user.email // <--- ADD THIS LINE (So Admins see who asked)
+      });
 
     if (error) {
       Alert.alert("Error", "Could not save your prayer request.");
     } else {
-      setNewRequest(""); // Clear input on success
+      setNewRequest(""); 
     }
-    await fetchRequests(); // Refetch all requests
+    await fetchRequests(); 
   };
 
   const handleMarkAsAnswered = async (id: number) => {

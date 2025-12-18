@@ -116,6 +116,20 @@ export default function AppLayout() {
           href: null, 
         }}
       />
+      <Tabs.Screen 
+        name="profile" 
+        options={{ 
+          href: null, 
+          headerShown: false 
+        }} 
+      />
+      <Tabs.Screen 
+        name="admin_dashboard" 
+        options={{ 
+          href: null, 
+          headerShown: false 
+        }} 
+      />
     </Tabs>
   );
 }

@@ -1,11 +1,10 @@
-import { Slot, useRouter, useSegments } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
-import { useFonts } from 'expo-font';
-import * as SplashScreen from 'expo-splash-screen';
-import { AuthProvider, useAuth } from '../providers/AuthProvider';
-import { Colors } from '../constants/colors';
-import { router } from "expo-router";
+import { Slot, SplashScreen, useRouter, useSegments } from "expo-router";
+import { useFonts } from "expo-font";
+import { useEffect } from "react";
+import { View, ActivityIndicator, Platform } from "react-native";
+import { AuthProvider, useAuth } from "../providers/AuthProvider";
+import { Colors } from "../constants/colors";
+import Head from "expo-router/head"; // <--- IMPORT THIS
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -17,9 +16,9 @@ function InitialLayout() {
 
   // 1. Load Fonts
   const [fontsLoaded] = useFonts({
-    'Brand_Heading': require('../../assets/fonts/TimesNewRomanMTCondensed-Bold.otf'),
-    'Brand_Body': require('../../assets/fonts/NeueMontreal-Regular.otf'),
-    'Brand_Body_Bold': require('../../assets/fonts/NeueMontreal-Bold.otf'), 
+    'Brand_Heading': require('../../assets/fonts/Cinzel-VariableFont_wght.ttf'),
+    'Brand_Body': require('../../assets/fonts/FaunaOne-Regular.ttf'),
+    'Brand_Body_Bold': require('../../assets/fonts/FaunaOne-Regular.ttf'), 
   });
 
   // 2. Hide Splash Screen
@@ -29,26 +28,21 @@ function InitialLayout() {
     }
   }, [fontsLoaded]);
 
-  // 3. TRAFFIC CONTROL (The Fix)
+  // 3. TRAFFIC CONTROL
   useEffect(() => {
-    if (loading) return; // Still checking session? Do nothing.
+    if (loading) return; 
 
     const inAuthGroup = segments[0] === '(auth)';
     const inAppGroup = segments[0] === '(app)';
 
     if (session && !inAppGroup) {
-      // CASE 1: Logged in, but NOT in the main app (e.g. on "/" or in "sign-in")
-      // Redirect to the meditation screen (a safe, known file)
-      router.replace('/(app)/meditate'); 
+      router.replace('/(app)'); 
     } else if (!session && !inAuthGroup) {
-      // CASE 2: Not logged in, and NOT in the auth group (e.g. on "/")
-      // Redirect to sign in
       router.replace('/(auth)/login');
     }
   }, [session, loading, segments]);
 
-  // 4. Loading State
-  if (loading) {
+  if (loading || !fontsLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.primary }}>
         <ActivityIndicator size="large" color={Colors.accent} />
@@ -56,13 +50,29 @@ function InitialLayout() {
     );
   }
 
-  // 5. Render
   return <Slot />;
 }
 
 export default function RootLayout() {
   return (
     <AuthProvider>
+      {/* --- THIS IS THE FIX FOR MOBILE RESPONSIVENESS --- */}
+      <Head>
+        <meta 
+          name="viewport" 
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" 
+        />
+        <style>{`
+          /* Critical CSS to force full height on mobile browsers */
+          html, body, #root {
+            height: 100%;
+            width: 100%;
+            overflow: hidden; /* Prevents bouncing scroll on iOS */
+            background-color: ${Colors.primary};
+          }
+        `}</style>
+      </Head>
+
       <InitialLayout />
     </AuthProvider>
   );

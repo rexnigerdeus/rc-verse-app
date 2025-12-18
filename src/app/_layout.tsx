@@ -16,9 +16,9 @@ function InitialLayout() {
 
   // 1. Load Fonts
   const [fontsLoaded] = useFonts({
-    'Brand_Heading': require('../../assets/fonts/Cinzel-VariableFont_wght.ttf'),
-    'Brand_Body': require('../../assets/fonts/FaunaOne-Regular.ttf'),
-    'Brand_Body_Bold': require('../../assets/fonts/FaunaOne-Regular.ttf'), 
+    'Brand_Heading': require('../../assets/fonts/TimesNewRomanMTCondensed-Bold.otf'),
+    'Brand_Body': require('../../assets/fonts/NeueMontreal-Regular.otf'),
+    'Brand_Body_Bold': require('../../assets/fonts/NeueMontreal-Bold.otf'), 
   });
 
   // 2. Hide Splash Screen

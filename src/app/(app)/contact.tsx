@@ -4,7 +4,7 @@ import { Colors } from '../../constants/colors';
 import i18n from '../../lib/i18n';
 import { FontAwesome5, Feather } from '@expo/vector-icons';
 
-const DONATION_NUMBER = "+225 07 59 88 47 48"; // Replace with real number
+const DONATION_NUMBER = "+225 07 78 55 44 83"; // Replace with real number
 
 // 1. Social Media Only
 const contactItems = [
@@ -102,7 +102,7 @@ export default function ContactScreen() {
                         {/* Number Button (Clickable) */}
                         <Pressable style={styles.numberBox} onPress={handleCall}>
                             <View>
-                                <Text style={styles.numberLabel}>Numéro Wave / OM</Text>
+                                <Text style={styles.numberLabel}>Numéro Wave</Text>
                                 <Text style={styles.numberText}>{DONATION_NUMBER}</Text>
                             </View>
                             <View style={styles.callIcon}>
@@ -114,7 +114,7 @@ export default function ContactScreen() {
                         <Text style={styles.modalMessage}>
                             Merci de vos dons qui permettent à ce projet d'exister et de constamment s'améliorer. 
                             {"\n\n"}
-                            Le numéro ci-dessus est disponible pour tous transferts Wave et Orange Money.
+                            Le numéro ci-dessus est disponible pour tous transferts Wave.
                         </Text>
 
                         {/* Close Button */}

@@ -8,8 +8,8 @@ import * as SQLite from 'expo-sqlite';
 import { Asset } from 'expo-asset';
 import { Colors } from '../../constants/colors';
 import i18n from '../../lib/i18n';
-import HTML from 'react-native-render-html';
 import { Feather } from '@expo/vector-icons';
+import { trackEvent } from '../../lib/analytics';
 
 // --- BIBLE DATA CONSTANTS ---
 
@@ -188,6 +188,9 @@ export default function BibleScreen() {
     useEffect(() => {
         // Fetch scripture using the book's uppercase ID
         fetchScripture(selectedVersion.id, selectedBook.id, selectedChapter);
+        if (selectedBook && selectedChapter) {
+        trackEvent('bible_read', { book: selectedBook, chapter: selectedChapter });
+    }
     }, [selectedVersion.id, selectedBook.id, selectedChapter, fetchScripture]);
 
 

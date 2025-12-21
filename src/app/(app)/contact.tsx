@@ -9,11 +9,11 @@ const DONATION_NUMBER = "+225 07 78 55 44 83"; // Replace with real number
 // 1. Social Media Only
 const contactItems = [
     { key: 'whatsapp', icon: 'whatsapp', url: 'https://wa.me/2250778554483' },
-    { key: 'facebook', icon: 'facebook', url: 'https://facebook.com/revivalcultureabidjan' },
-    { key: 'tiktok', icon: 'tiktok', url: 'https://www.tiktok.com/@revivalcultureabidjan' },
-    { key: 'email', icon: 'envelope', url: 'mailto:contact@revivalculture.ci' },
-    { key: 'website', icon: 'globe', url: 'https://www.revivalculture.ci' },
-    { key: "location", icon: "map-marker-alt", url: "https://maps.app.goo.gl/somewhere" }, // Ensure valid URL
+    { key: 'facebook', icon: 'facebook', url: 'https://www.facebook.com/DeeperGeneration' },
+    { key: 'tiktok', icon: 'tiktok', url: 'http://tiktok.com/@revculture.ci' },
+    { key: 'email', icon: 'envelope', url: 'mailto:contact@revculture.ci' },
+    { key: 'website', icon: 'globe', url: 'https://www.revculture.ci' },
+    { key: "location", icon: "map-marker-alt", url: "https://maps.app.goo.gl/o8JjWJ5FVci3X3Ms5" }, 
 ];
 
 const InfoBox = ({ item }: { item: typeof contactItems[0] }) => {

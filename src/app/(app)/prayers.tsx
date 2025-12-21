@@ -17,6 +17,7 @@ import i18n from "../../lib/i18n";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../providers/AuthProvider";
 import { Database } from "../../types/database.types";
+import { trackEvent } from '../../lib/analytics';
 
 type PrayerRequest = Database["public"]["Tables"]["prayer_requests"]["Row"];
 
@@ -79,6 +80,7 @@ export default function PrayersScreen() {
       Alert.alert("Error", "Could not save your prayer request.");
     } else {
       setNewRequest(""); 
+      trackEvent('prayer_sent'); 
     }
     await fetchRequests(); 
   };

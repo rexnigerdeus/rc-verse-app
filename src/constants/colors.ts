@@ -14,6 +14,7 @@ export const Colors = {
   accent: '#A5D6A7',       // Sage Green (Calm, nature, growth)
   accentDark: '#2E7D32',   // Deep Forest Green
   accentBackground: 'rgba(165, 214, 167, 0.15)', // Soft glow for active states
+  highlight: '#FFB74D',      // Warm Amber (Energy, optimism, attention)
   
   // SPECIALS
   tint: '#D7CCC8',         // Warm sand tint for variety

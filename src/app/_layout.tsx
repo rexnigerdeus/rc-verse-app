@@ -1,10 +1,10 @@
-import { Slot, SplashScreen, useRouter, useSegments } from "expo-router";
+import { Slot, SplashScreen, useRouter, useSegments, useRootNavigationState } from "expo-router";
 import { useFonts } from "expo-font";
 import { useEffect } from "react";
-import { View, ActivityIndicator, Platform } from "react-native";
+import { View, ActivityIndicator } from "react-native";
 import { AuthProvider, useAuth } from "../providers/AuthProvider";
 import { Colors } from "../constants/colors";
-import Head from "expo-router/head"; // <--- IMPORT THIS
+import Head from "expo-router/head";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -13,10 +13,13 @@ function InitialLayout() {
   const { session, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  
+  // FIX: Get the navigation state to ensure the tree is ready before redirecting
+  const rootNavigationState = useRootNavigationState();
 
   // 1. Load Fonts
   const [fontsLoaded] = useFonts({
-    'Brand_Heading': require('../../assets/fonts/TimesNewRomanMTCondensed-Bold.otf'),
+    'Brand_Heading': require('../../assets/fonts/Vollkorn-Medium.ttf'),
     'Brand_Body': require('../../assets/fonts/NeueMontreal-Regular.otf'),
     'Brand_Body_Bold': require('../../assets/fonts/NeueMontreal-Bold.otf'), 
   });
@@ -30,6 +33,9 @@ function InitialLayout() {
 
   // 3. TRAFFIC CONTROL
   useEffect(() => {
+    // FIX: Check if navigation is ready. If not, do not attempt to redirect yet.
+    if (!rootNavigationState?.key) return;
+
     if (loading) return; 
 
     const inAuthGroup = segments[0] === '(auth)';
@@ -38,10 +44,12 @@ function InitialLayout() {
     if (session && !inAppGroup) {
       router.replace('/(app)'); 
     } else if (!session && !inAuthGroup) {
+      // Ensure we don't redirect to login if we are already there (prevents loops)
       router.replace('/(auth)/login');
     }
-  }, [session, loading, segments]);
+  }, [session, loading, segments, rootNavigationState?.key]); // Add navigation key to dependencies
 
+  // Loading State
   if (loading || !fontsLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.primary }}>

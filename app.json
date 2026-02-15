@@ -13,7 +13,7 @@
       "backgroundColor": "#1A1C1E"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.revivalculture.monquotidien",
       "buildNumber": "1",
       "infoPlist": {

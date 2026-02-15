@@ -45,10 +45,12 @@
       "orientation": "portrait"
     },
     "plugins": [
-      "expo-router",
-        {
-          "origin": "https://revculture.ci" 
-        },
+      [
+        "expo-router",
+          {
+            "origin": "https://revculture.ci" 
+          }
+      ],
       "expo-localization",
       "expo-font",
       "expo-sqlite",

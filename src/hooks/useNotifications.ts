@@ -1,6 +1,7 @@
 // src/hooks/useNotifications.ts
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
+import { SchedulableTriggerInputTypes } from "expo-notifications";
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import i18n from "../lib/i18n";
@@ -47,9 +48,9 @@ const scheduleVisitationNotifications = async () => {
           sound: true,
         },
         trigger: {
+          type: SchedulableTriggerInputTypes.DAILY,
           hour: time.hour,
           minute: time.minute,
-          repeats: true, // This ensures it fires every day at this time
         },
       });
     }

@@ -1,9 +1,10 @@
-// src/app/(app)/visitations.tsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import i18n from '../../lib/i18n';
-import { Feather } from '@expo/vector-icons'; // Switching to Feather for consistency
+import { Feather } from '@expo/vector-icons'; 
+import { ScreenWrapper } from '../../components/ScreenWrapper';
 
 type Visitation = {
   key: 'transition' | 'sunrise' | 'fullDay' | 'sunset';
@@ -62,6 +63,7 @@ const visitationTimes: Visitation[] = [
 export default function VisitationsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedVisitation, setSelectedVisitation] = useState<Visitation | null>(null);
+  const router = useRouter();
 
   const openModal = (visitation: Visitation) => {
     setSelectedVisitation(visitation);
@@ -69,84 +71,91 @@ export default function VisitationsScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{i18n.t('visitations.title')}</Text>
-        <Text style={styles.introText}>{i18n.t('visitations.intro')}</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.list}>
-        {visitationTimes.map((item) => (
-          <Pressable 
-            key={item.key} 
-            style={({pressed}) => [styles.itemContainer, pressed && {backgroundColor: 'rgba(255,255,255,0.05)'}]} 
-            onPress={() => openModal(item)}
-          >
-            <View style={styles.textContainer}>
-              <Text style={styles.itemTitle}>{`${item.emoji}  ${i18n.t(`visitations.${item.key}`)}`}</Text>
-              <Text style={styles.itemTime}>{item.time}</Text>
-            </View>
-            <View style={styles.iconContainer}>
-                <Feather name="chevron-right" size={20} color={Colors.accent} />
-            </View>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      {/* MODAL */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
+    <ScreenWrapper>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        <View style={styles.modalContainer}>
-          <ScrollView style={styles.modalContent} contentContainerStyle={{paddingBottom: 20}}>
-            <Text style={styles.modalTitle}>{`${selectedVisitation?.emoji}  ${i18n.t(`visitations.${selectedVisitation?.key}`)}`}</Text>
-            
-            <Text style={styles.modalDescription}>{selectedVisitation?.details.description}</Text>
-            
-            <View style={styles.instructionContainer}>
-              <Text style={styles.modalInstruction}>
-                <Text style={{fontFamily: 'Brand_Body_Bold', color: Colors.highlight}}>Instruction : </Text>
-                {selectedVisitation?.details.instruction}
-              </Text>
-            </View>
-
-            <Text style={styles.modalVerse}>{selectedVisitation?.details.verse}</Text>
-
-            <Pressable style={styles.closeButton} onPress={() => setModalVisible(false)}>
-              <Text style={styles.closeButtonText}>Fermer</Text>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <Pressable onPress={() => router.back()} style={styles.backButton}>
+              <Feather name="arrow-left" size={24} color={Colors.text} />
             </Pressable>
+            <Text style={styles.headerTitle}>Visitations</Text>
+            <View style={{width: 24}} />
+          </View>
+          <Text style={styles.introText}>{i18n.t('visitations.intro')}</Text>
+          <ScrollView contentContainerStyle={styles.list}>
+            {visitationTimes.map((item) => (
+              <Pressable 
+                key={item.key} 
+                style={({pressed}) => [styles.itemContainer, pressed && {backgroundColor: 'rgba(255,255,255,0.05)'}]} 
+                onPress={() => openModal(item)}
+              >
+                <View style={styles.textContainer}>
+                  <Text style={styles.itemTitle}>{`${item.emoji}  ${i18n.t(`visitations.${item.key}`)}`}</Text>
+                  <Text style={styles.itemTime}>{item.time}</Text>
+                </View>
+                <View style={styles.iconContainer}>
+                    <Feather name="chevron-right" size={20} color={Colors.accent} />
+                </View>
+              </Pressable>
+            ))}
           </ScrollView>
+
+          {/* MODAL */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={modalVisible}
+            onRequestClose={() => setModalVisible(false)}
+          >
+            <View style={styles.modalContainer}>
+              <ScrollView style={styles.modalContent} contentContainerStyle={{paddingBottom: 20}}>
+                <Text style={styles.modalTitle}>{`${selectedVisitation?.emoji}  ${i18n.t(`visitations.${selectedVisitation?.key}`)}`}</Text>
+                
+                <Text style={styles.modalDescription}>{selectedVisitation?.details.description}</Text>
+                
+                <View style={styles.instructionContainer}>
+                  <Text style={styles.modalInstruction}>
+                    <Text style={{fontFamily: 'Brand_Body_Bold', color: Colors.highlight}}>Instruction : </Text>
+                    {selectedVisitation?.details.instruction}
+                  </Text>
+                </View>
+
+                <Text style={styles.modalVerse}>{selectedVisitation?.details.verse}</Text>
+
+                <Pressable style={styles.closeButton} onPress={() => setModalVisible(false)}>
+                  <Text style={styles.closeButtonText}>Fermer</Text>
+                </Pressable>
+              </ScrollView>
+            </View>
+          </Modal>
         </View>
-      </Modal>
-    </View>
+      </KeyboardAvoidingView>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.primary },
-  header: { 
-      paddingTop: 60, 
-      paddingBottom: 20, 
-      paddingHorizontal: 20,
-      borderBottomWidth: 1,
-      borderBottomColor: 'rgba(244, 241, 234, 0.05)',
+  container: { flex: 1, backgroundColor: Colors.primary, paddingTop: 20, },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
-  title: { 
-      fontFamily: 'Brand_Heading', 
-      fontSize: 32, 
-      color: Colors.text, 
-      textAlign: 'center',
-      marginBottom: 10,
-  },
+  backButton: { padding: 8 },
+  headerTitle: { fontFamily: 'Brand_Heading', fontSize: 20, color: Colors.text },
   introText: { 
       fontFamily: 'Brand_Body', 
       fontSize: 15, 
       color: 'rgba(244, 241, 234, 0.7)', 
       textAlign: 'center', 
-      lineHeight: 24 
+      lineHeight: 24,
+      paddingHorizontal: 20,
+      marginBottom: 20,
   },
   list: { paddingHorizontal: 15, paddingTop: 20 },
   

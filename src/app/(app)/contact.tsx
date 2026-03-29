@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Linking, Alert, FlatList, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Linking, Alert, FlatList, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { Colors } from '../../constants/colors';
 import i18n from '../../lib/i18n';
 import { FontAwesome5, Feather } from '@expo/vector-icons';
+import { ScreenWrapper } from "../../components/ScreenWrapper";
 
 const DONATION_NUMBER = "+225 07 78 55 44 83"; // Replace with real number
 
@@ -53,82 +54,89 @@ export default function ContactScreen() {
     };
 
     return (
-        <View style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.title}>{i18n.t('contact.title') || "Contact"}</Text>
-                <Text style={styles.introText}>{i18n.t('contact.intro') || "Nous sommes à votre écoute"}</Text>
-            </View>
-
-            <View style={styles.content}>
-                
-                {/* 2. BIG DONATION CARD (Opens Modal now) */}
-                <Pressable 
-                    style={({pressed}) => [styles.donationCard, pressed && {opacity: 0.9}]}
-                    onPress={() => setModalVisible(true)}
-                >
-                    <View style={styles.donationIconCircle}>
-                        <FontAwesome5 name="hand-holding-heart" size={32} color={Colors.primary} />
-                    </View>
-                    <View style={styles.donationTextContainer}>
-                        <Text style={styles.donationTitle}>Faire un don</Text>
-                        <Text style={styles.donationSubtitle}>Soutenir la mission</Text>
-                    </View>
-                    <Feather name="chevron-right" size={24} color={Colors.primary} />
-                </Pressable>
-
-                {/* 3. Social Grid */}
-                <Text style={styles.sectionTitle}>Nos Réseaux</Text>
-                <FlatList
-                    data={contactItems}
-                    renderItem={({ item }) => <InfoBox item={item} />}
-                    keyExtractor={(item) => item.key}
-                    numColumns={3}
-                    contentContainerStyle={styles.grid}
-                />
-            </View>
-
-            {/* --- DONATION MODAL --- */}
-            <Modal
-                animationType="fade"
-                transparent={true}
-                visible={modalVisible}
-                onRequestClose={() => setModalVisible(false)}
+        <ScreenWrapper>
+            <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ flex: 1 }} // Plus besoin de remettre la couleur de fond ou les insets ici !
             >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        {/* Title */}
-                        <Text style={styles.modalTitle}>Soutenir le Projet</Text>
-
-                        {/* Number Button (Clickable) */}
-                        <Pressable style={styles.numberBox} onPress={handleCall}>
-                            <View>
-                                <Text style={styles.numberLabel}>Numéro Wave</Text>
-                                <Text style={styles.numberText}>{DONATION_NUMBER}</Text>
-                            </View>
-                            <View style={styles.callIcon}>
-                                <Feather name="phone-call" size={20} color={Colors.primary} />
-                            </View>
-                        </Pressable>
-                        
-                        {/* The Message */}
-                        <Text style={styles.modalMessage}>
-                            Merci de vos dons qui permettent à ce projet d'exister et de constamment s'améliorer. 
-                            {"\n\n"}
-                            Le numéro ci-dessus est disponible pour tous transferts Wave.
-                        </Text>
-
-                        {/* Close Button */}
-                        <Pressable 
-                            style={styles.closeButton} 
-                            onPress={() => setModalVisible(false)}
-                        >
-                            <Text style={styles.closeButtonText}>Fermer</Text>
-                        </Pressable>
-                    </View>
+            <View style={styles.container}>
+                <View style={styles.header}>
+                    <Text style={styles.title}>{i18n.t('contact.title') || "Contact"}</Text>
+                    <Text style={styles.introText}>{i18n.t('contact.intro') || "Nous sommes à votre écoute"}</Text>
                 </View>
-            </Modal>
 
-        </View>
+                <View style={styles.content}>
+                    
+                    {/* 2. BIG DONATION CARD (Opens Modal now) */}
+                    <Pressable 
+                        style={({pressed}) => [styles.donationCard, pressed && {opacity: 0.9}]}
+                        onPress={() => setModalVisible(true)}
+                    >
+                        <View style={styles.donationIconCircle}>
+                            <FontAwesome5 name="hand-holding-heart" size={32} color={Colors.primary} />
+                        </View>
+                        <View style={styles.donationTextContainer}>
+                            <Text style={styles.donationTitle}>Faire un don</Text>
+                            <Text style={styles.donationSubtitle}>Soutenir la mission</Text>
+                        </View>
+                        <Feather name="chevron-right" size={24} color={Colors.primary} />
+                    </Pressable>
+
+                    {/* 3. Social Grid */}
+                    <Text style={styles.sectionTitle}>Nos Réseaux</Text>
+                    <FlatList
+                        data={contactItems}
+                        renderItem={({ item }) => <InfoBox item={item} />}
+                        keyExtractor={(item) => item.key}
+                        numColumns={3}
+                        contentContainerStyle={styles.grid}
+                    />
+                </View>
+
+                {/* --- DONATION MODAL --- */}
+                <Modal
+                    animationType="fade"
+                    transparent={true}
+                    visible={modalVisible}
+                    onRequestClose={() => setModalVisible(false)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            {/* Title */}
+                            <Text style={styles.modalTitle}>Soutenir le Projet</Text>
+
+                            {/* Number Button (Clickable) */}
+                            <Pressable style={styles.numberBox} onPress={handleCall}>
+                                <View>
+                                    <Text style={styles.numberLabel}>Numéro Wave</Text>
+                                    <Text style={styles.numberText}>{DONATION_NUMBER}</Text>
+                                </View>
+                                <View style={styles.callIcon}>
+                                    <Feather name="phone-call" size={20} color={Colors.primary} />
+                                </View>
+                            </Pressable>
+                            
+                            {/* The Message */}
+                            <Text style={styles.modalMessage}>
+                                Merci de vos dons qui permettent à ce projet d'exister et de constamment s'améliorer. 
+                                {"\n\n"}
+                                Le numéro ci-dessus est disponible pour tous transferts Wave.
+                            </Text>
+
+                            {/* Close Button */}
+                            <Pressable 
+                                style={styles.closeButton} 
+                                onPress={() => setModalVisible(false)}
+                            >
+                                <Text style={styles.closeButtonText}>Fermer</Text>
+                            </Pressable>
+                        </View>
+                    </View>
+                </Modal>
+
+            </View>
+            </KeyboardAvoidingView>
+        </ScreenWrapper>
     );
 }
 

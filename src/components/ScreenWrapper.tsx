@@ -1,43 +1,38 @@
 import React from 'react';
-import { StyleSheet, StatusBar, SafeAreaView, ViewStyle } from 'react-native';
-import * as Animatable from 'react-native-animatable';
+import { View, StyleSheet, ViewProps } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 
-type Props = {
+interface ScreenWrapperProps extends ViewProps {
   children: React.ReactNode;
-  style?: ViewStyle;
-  delay?: number;
-};
+}
 
-// Animation definition: slightly slide up + fade in
-const fadeInUp = {
-  0: { opacity: 0, translateY: 20 },
-  1: { opacity: 1, translateY: 0 },
-};
+export function ScreenWrapper({ children, style, ...rest }: ScreenWrapperProps) {
+  // Récupère les dimensions de la zone de sécurité (encoche, Dynamic Island)
+  const insets = useSafeAreaInsets();
 
-export const ScreenWrapper = ({ children, style, delay = 0 }: Props) => {
   return (
-    <SafeAreaView style={[styles.container, style]}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
-      <Animatable.View 
-        animation={fadeInUp} 
-        duration={600} 
-        delay={delay}
-        useNativeDriver 
-        style={styles.content}
-      >
-        {children}
-      </Animatable.View>
-    </SafeAreaView>
+    <View 
+      style={[
+        styles.container, 
+        { 
+          paddingTop: insets.top, // Ajoute la marge exacte pour l'iPhone actuel
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 0 // Gère aussi la barre d'accueil en bas si besoin
+        }, 
+        style
+      ]} 
+      {...rest}
+    >
+      {children}
+    </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.primary,
+    // On met la couleur de fond globale de l'app ici. 
+    // Ainsi, elle montera bien derrière la barre de statut (l'heure/batterie).
+    backgroundColor: Colors.primary, 
   },
-  content: {
-    flex: 1,
-  }
 });

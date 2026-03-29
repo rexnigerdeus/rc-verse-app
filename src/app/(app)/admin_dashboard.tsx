@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, Linking, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, Linking, ActivityIndicator, ScrollView, Platform, RefreshControl, KeyboardAvoidingView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors } from '../../constants/colors';
+import { ScreenWrapper } from "../../components/ScreenWrapper";
 
-// Types for our data
+// Typage strict pour éviter les crashs
 type AdminStats = {
   total_users: number;
   active_today: number;
@@ -16,6 +17,7 @@ type AdminStats = {
     email: string;
     created_at: string;
     last_sign_in_at: string;
+    display_name: string; // Ajouté ici !
   }[];
 };
 
@@ -25,7 +27,7 @@ export default function AdminDashboard() {
   
   // Data States
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [requests, setRequests] = useState<any[]>([]); // For Prayers/Suggestions
+  const [requests, setRequests] = useState<any[]>([]); 
   const [requestFilter, setRequestFilter] = useState<'suggestions' | 'prayers'>('suggestions');
   
   const [loading, setLoading] = useState(true);
@@ -33,14 +35,14 @@ export default function AdminDashboard() {
 
   // --- FETCH DATA ---
   const fetchAllData = async () => {
-    setLoading(true);
     try {
-      // 1. Fetch Stats via our secure SQL function
+      // 1. Stats globales via la fonction SQL
       const { data: statsData, error: statsError } = await supabase.rpc('get_admin_stats');
       if (statsError) throw statsError;
       setStats(statsData as AdminStats);
 
-      // 2. Fetch Requests (reusing previous logic)
+      // 2. Requêtes (Suggestions / Prières)
+      // Ajustez 'prayer_requests' au nom réel de votre table si besoin
       const tableName = requestFilter === 'suggestions' ? 'suggestions' : 'prayer_requests';
       const { data: reqData, error: reqError } = await supabase
         .from(tableName)
@@ -50,7 +52,7 @@ export default function AdminDashboard() {
       if (!reqError) setRequests(reqData || []);
 
     } catch (error) {
-      console.error("Admin Load Error:", error);
+      console.error("Erreur Dashboard Admin:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -58,8 +60,9 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
+    setLoading(true);
     fetchAllData();
-  }, [requestFilter]); // Re-fetch when sub-filter changes
+  }, [requestFilter]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -67,43 +70,50 @@ export default function AdminDashboard() {
   };
 
   // --- RENDERERS ---
-
   const renderOverview = () => {
     if (!stats) return null;
+    
+    // Calcul de l'engagement
+    const engagementRate = stats.total_users > 0 
+        ? Math.round((stats.active_today / stats.total_users) * 100) 
+        : 0;
+
     return (
-        <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        <ScrollView 
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />}
+            showsVerticalScrollIndicator={false}
+        >
             <View style={styles.gridContainer}>
-                {/* Key Metrics Cards */}
                 <View style={styles.statCard}>
                     <Feather name="users" size={24} color={Colors.accent} />
                     <Text style={styles.statNumber}>{stats.total_users}</Text>
-                    <Text style={styles.statLabel}>Utilisateurs Total</Text>
+                    <Text style={styles.statLabel}>Inscrits</Text>
                 </View>
                 <View style={styles.statCard}>
-                    <Feather name="activity" size={24} color="#4cd964" />
+                    <Feather name="activity" size={24} color="#A5D6A7" />
                     <Text style={styles.statNumber}>{stats.active_today}</Text>
                     <Text style={styles.statLabel}>Actifs (24h)</Text>
                 </View>
                 <View style={styles.statCard}>
-                    <Feather name="heart" size={24} color="#ff3b30" />
+                    <Feather name="heart" size={24} color="#EF9A9A" />
                     <Text style={styles.statNumber}>{stats.total_prayers}</Text>
-                    <Text style={styles.statLabel}>Prières</Text>
+                    <Text style={styles.statLabel}>Prières/Sugg.</Text>
                 </View>
                 <View style={styles.statCard}>
-                    <Feather name="play-circle" size={24} color="#5ac8fa" />
+                    <Feather name="play-circle" size={24} color="#90CAF9" />
                     <Text style={styles.statNumber}>{stats.total_meditations}</Text>
                     <Text style={styles.statLabel}>Méditations</Text>
                 </View>
             </View>
 
-            {/* Growth Insight Section */}
             <View style={styles.insightSection}>
-                <Text style={styles.sectionTitle}>Insights</Text>
+                <Text style={styles.sectionTitle}>Insights & Santé de l'app</Text>
                 <View style={styles.insightRow}>
+                    <Feather name="trending-up" size={20} color={Colors.accent} style={{marginRight: 10}} />
                     <Text style={styles.insightText}>
-                        Le taux d'engagement est de <Text style={{fontWeight:'bold', color: Colors.accent}}>
-                        {Math.round((stats.active_today / (stats.total_users || 1)) * 100)}%
-                        </Text> aujourd'hui.
+                        <Text style={{fontFamily:'Brand_Body_Bold', color: Colors.text}}>{engagementRate}% </Text> 
+                        de vos utilisateurs se sont connectés aujourd'hui.
+                        {engagementRate > 20 ? " C'est une excellente rétention !" : " Pensez à envoyer une notification push pour les réengager."}
                     </Text>
                 </View>
             </View>
@@ -111,31 +121,21 @@ export default function AdminDashboard() {
     );
   };
 
-  const renderUsers = () => {
-    return (
-        <View style={{flex: 1}}>
-            {/* Total Count Header */}
-            <View style={{ 
-                flexDirection: 'row', 
-                alignItems: 'center', 
-                justifyContent: 'space-between', 
-                marginBottom: 15,
-                paddingHorizontal: 4 
-            }}>
-                <Text style={styles.listHeaderTitle}>Liste des Utilisateurs</Text>
-                <View style={{ backgroundColor: Colors.accent, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
-                    <Text style={{ fontFamily: 'Brand_Body_Bold', color: Colors.primary, fontSize: 12 }}>
-                        Total: {stats?.total_users || 0}
-                    </Text>
-                </View>
-            </View>
+  const renderUsers = () => (
+    <View style={{flex: 1}}>
+        <View style={styles.listHeaderContainer}>
+            <Text style={styles.listHeaderTitle}>Dernières connexions</Text>
+        </View>
 
-            <FlatList
-                data={stats?.users || []}
-                keyExtractor={(item) => item.id}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-                contentContainerStyle={{paddingBottom: 40}}
-                renderItem={({ item }) => (
+        <FlatList
+            data={stats?.users || []}
+            keyExtractor={(item) => item.id}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent}/>}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{paddingBottom: 40}}
+            renderItem={({ item }) => {
+                const isOnline = new Date(item.last_sign_in_at) > new Date(Date.now() - 86400000); // Actif < 24h
+                return (
                     <View style={styles.userRow}>
                         <View style={styles.userIcon}>
                             <Text style={{ fontFamily: 'Brand_Body_Bold', color: Colors.primary }}>
@@ -143,178 +143,145 @@ export default function AdminDashboard() {
                             </Text>
                         </View>
                         <View style={{flex: 1}}>
-                            <Text style={{ color: Colors.text, fontFamily: 'Brand_Body_Bold', fontSize: 16 }}>
-                                {item.display_name}
-                            </Text>
+                            <Text style={styles.userName}>{item.display_name}</Text>
                             <Text style={styles.userEmail}>{item.email}</Text>
-                            <Text style={styles.userDate}>
-                                Inscrit le {new Date(item.created_at).toLocaleDateString()}
-                            </Text>
                         </View>
-                        {/* Active Indicator */}
-                        <View style={[
-                            styles.statusDot, 
-                            { backgroundColor: new Date(item.last_sign_in_at) > new Date(Date.now() - 86400000) ? '#4cd964' : 'rgba(255,255,255,0.2)' }
-                        ]} />
+                        <View style={[styles.statusDot, { backgroundColor: isOnline ? '#A5D6A7' : 'rgba(255,255,255,0.1)' }]} />
                     </View>
-                )}
-            />
-        </View>
-    );
-  };
+                )
+            }}
+        />
+    </View>
+  );
 
-  const renderRequests = () => {
-    return (
-        <View style={{flex: 1}}>
-            {/* Sub-Tabs for Requests */}
-            <View style={styles.subTabs}>
-                <Pressable 
-                    onPress={() => setRequestFilter('suggestions')}
-                    style={[styles.subTab, requestFilter === 'suggestions' && styles.subTabActive]}
-                >
-                    <Text style={[styles.subTabText, requestFilter === 'suggestions' && styles.subTabTextActive]}>Suggestions</Text>
+  const renderRequests = () => (
+    <View style={{flex: 1}}>
+        <View style={styles.subTabs}>
+            <Pressable onPress={() => setRequestFilter('suggestions')} style={[styles.subTab, requestFilter === 'suggestions' && styles.subTabActive]}>
+                <Text style={[styles.subTabText, requestFilter === 'suggestions' && styles.subTabTextActive]}>Suggestions</Text>
+            </Pressable>
+            <Pressable onPress={() => setRequestFilter('prayers')} style={[styles.subTab, requestFilter === 'prayers' && styles.subTabActive]}>
+                <Text style={[styles.subTabText, requestFilter === 'prayers' && styles.subTabTextActive]}>Prières</Text>
+            </Pressable>
+        </View>
+
+        <FlatList
+            data={requests}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={{paddingBottom: 40}}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent}/>}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={<Text style={styles.emptyText}>La boîte de réception est vide.</Text>}
+            renderItem={({ item }) => {
+                const content = item.content || item.request_text || "Message vide";
+                return (
+                    <View style={styles.card}>
+                            <View style={styles.cardHeader}>
+                            <Text style={styles.cardEmail}>{item.email || "Utilisateur anonyme"}</Text>
+                            {item.email && (
+                                <Pressable onPress={() => Linking.openURL(`mailto:${item.email}`)}>
+                                    <View style={styles.actionButton}>
+                                        <Feather name="mail" size={14} color={Colors.primary} />
+                                        <Text style={styles.actionButtonText}>Répondre</Text>
+                                    </View>
+                                </Pressable>
+                            )}
+                        </View>
+                        <Text style={styles.cardContent}>{content}</Text>
+                        <Text style={styles.cardDate}>{new Date(item.created_at).toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}</Text>
+                    </View>
+                );
+            }}
+        />
+    </View>
+  );
+
+  return (
+    <ScreenWrapper>
+        {/* Suppression du style Container redondant pour laisser ScreenWrapper faire son travail */}
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+            
+            <View style={styles.header}>
+                <Pressable onPress={() => router.back()} style={styles.backButton}>
+                    <Feather name="arrow-left" size={24} color={Colors.text} />
                 </Pressable>
-                <Pressable 
-                    onPress={() => setRequestFilter('prayers')}
-                    style={[styles.subTab, requestFilter === 'prayers' && styles.subTabActive]}
-                >
-                    <Text style={[styles.subTabText, requestFilter === 'prayers' && styles.subTabTextActive]}>Prières</Text>
+                <Text style={styles.title}>RC Studio</Text>
+                <View style={{width: 24}} /> 
+            </View>
+
+            <View style={styles.tabs}>
+                <Pressable style={[styles.tab, activeTab === 'overview' && styles.activeTab]} onPress={() => setActiveTab('overview')}>
+                    <Text style={[styles.tabText, activeTab === 'overview' && styles.activeTabText]}>Stats</Text>
+                </Pressable>
+                <Pressable style={[styles.tab, activeTab === 'users' && styles.activeTab]} onPress={() => setActiveTab('users')}>
+                    <Text style={[styles.tabText, activeTab === 'users' && styles.activeTabText]}>Audience</Text>
+                </Pressable>
+                <Pressable style={[styles.tab, activeTab === 'requests' && styles.activeTab]} onPress={() => setActiveTab('requests')}>
+                    <Text style={[styles.tabText, activeTab === 'requests' && styles.activeTabText]}>Inbox</Text>
                 </Pressable>
             </View>
 
-            <FlatList
-                data={requests}
-                keyExtractor={(item) => item.id.toString()}
-                contentContainerStyle={{paddingBottom: 40}}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-                ListEmptyComponent={<Text style={styles.emptyText}>Aucune donnée.</Text>}
-                renderItem={({ item }) => {
-                    const content = requestFilter === 'suggestions' ? item.content : item.request_text;
-                    const isAnswered = requestFilter === 'prayers' && item.is_fulfilled;
-                    return (
-                        <View style={styles.card}>
-                             <View style={styles.cardHeader}>
-                                <Text style={styles.cardEmail}>{item.email || "Anonyme"}</Text>
-                                {item.email && (
-                                    <Pressable onPress={() => Linking.openURL(`mailto:${item.email}`)}>
-                                        <Feather name="mail" size={16} color={Colors.accent} />
-                                    </Pressable>
-                                )}
-                            </View>
-                            <Text style={styles.cardContent}>{content}</Text>
-                            <View style={styles.cardFooter}>
-                                <Text style={styles.cardDate}>{new Date(item.created_at).toLocaleDateString()}</Text>
-                                {isAnswered && <Text style={{color: '#4cd964', fontSize: 12}}>Exaucé</Text>}
-                            </View>
-                        </View>
-                    );
-                }}
-            />
-        </View>
-    );
-  };
-
-  return (
-    <View style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Feather name="arrow-left" size={24} color={Colors.text} />
-        </Pressable>
-        <Text style={styles.title}>RC Administration</Text>
-        <View style={{width: 24}} /> 
-      </View>
-
-      {/* MAIN TABS */}
-      <View style={styles.tabs}>
-        <Pressable style={[styles.tab, activeTab === 'overview' && styles.activeTab]} onPress={() => setActiveTab('overview')}>
-            <Text style={[styles.tabText, activeTab === 'overview' && styles.activeTabText]}>Vue d'ensemble</Text>
-        </Pressable>
-        <Pressable style={[styles.tab, activeTab === 'users' && styles.activeTab]} onPress={() => setActiveTab('users')}>
-            <Text style={[styles.tabText, activeTab === 'users' && styles.activeTabText]}>Utilisateurs</Text>
-        </Pressable>
-        <Pressable style={[styles.tab, activeTab === 'requests' && styles.activeTab]} onPress={() => setActiveTab('requests')}>
-            <Text style={[styles.tabText, activeTab === 'requests' && styles.activeTabText]}>Requêtes</Text>
-        </Pressable>
-      </View>
-
-      {/* CONTENT AREA */}
-      <View style={styles.content}>
-        {loading && !refreshing ? (
-            <ActivityIndicator size="large" color={Colors.accent} style={{marginTop: 50}} />
-        ) : (
-            <>
-                {activeTab === 'overview' && renderOverview()}
-                {activeTab === 'users' && renderUsers()}
-                {activeTab === 'requests' && renderRequests()}
-            </>
-        )}
-      </View>
-    </View>
+            <View style={styles.content}>
+                {loading && !refreshing ? (
+                    <ActivityIndicator size="large" color={Colors.accent} style={{marginTop: 50}} />
+                ) : (
+                    <>
+                        {activeTab === 'overview' && renderOverview()}
+                        {activeTab === 'users' && renderUsers()}
+                        {activeTab === 'requests' && renderRequests()}
+                    </>
+                )}
+            </View>
+            
+        </KeyboardAvoidingView>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.primary },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 50, paddingHorizontal: 20, marginBottom: 20 },
-  backButton: { padding: 8 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingHorizontal: 20, marginBottom: 20 },
+  backButton: { padding: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20 },
   title: { fontFamily: 'Brand_Heading', fontSize: 20, color: Colors.text },
   
-  // TABS
-  tabs: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
-  tab: { marginRight: 20, paddingVertical: 10 },
+  tabs: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+  tab: { marginRight: 24, paddingVertical: 12 },
   activeTab: { borderBottomWidth: 2, borderBottomColor: Colors.accent },
-  tabText: { fontFamily: 'Brand_Body', color: 'rgba(255,255,255,0.5)', fontSize: 16 },
+  tabText: { fontFamily: 'Brand_Body', color: 'rgba(255,255,255,0.4)', fontSize: 15 },
   activeTabText: { color: Colors.text, fontFamily: 'Brand_Body_Bold' },
 
   content: { flex: 1, paddingHorizontal: 20 },
 
-  // OVERVIEW STYLES
-  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 10 },
-  statCard: { 
-      width: '48%', 
-      backgroundColor: 'rgba(255,255,255,0.05)', 
-      borderRadius: 12, 
-      padding: 20, 
-      marginBottom: 10,
-      alignItems: 'center' 
-  },
-  statNumber: { fontFamily: 'Brand_Heading', fontSize: 28, color: Colors.text, marginVertical: 8 },
-  statLabel: { fontFamily: 'Brand_Body', fontSize: 12, color: 'rgba(255,255,255,0.5)' },
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
+  statCard: { width: '48%', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, padding: 20, marginBottom: 4, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  statNumber: { fontFamily: 'Brand_Heading', fontSize: 32, color: Colors.text, marginVertical: 8 },
+  statLabel: { fontFamily: 'Brand_Body', fontSize: 13, color: 'rgba(255,255,255,0.4)' },
   
-  insightSection: { marginTop: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 20 },
-  sectionTitle: { fontFamily: 'Brand_Body_Bold', color: Colors.text, marginBottom: 10 },
-  insightRow: { flexDirection: 'row', alignItems: 'center' },
-  insightText: { color: 'rgba(255,255,255,0.8)', fontSize: 14, lineHeight: 20 },
+  insightSection: { marginTop: 24, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  sectionTitle: { fontFamily: 'Brand_Body_Bold', color: Colors.accent, marginBottom: 12, textTransform: 'uppercase', fontSize: 12, letterSpacing: 1 },
+  insightRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  insightText: { color: 'rgba(255,255,255,0.6)', fontSize: 15, lineHeight: 22, flex: 1, fontFamily: 'Brand_Body' },
 
-  // USERS STYLES
-  listHeaderTitle: { fontFamily: 'Brand_Body_Bold', color: Colors.accent, marginBottom: 15 },
-  userRow: { 
-      flexDirection: 'row', 
-      alignItems: 'center', 
-      backgroundColor: 'rgba(255,255,255,0.05)', 
-      padding: 12, 
-      borderRadius: 10, 
-      marginBottom: 10 
-  },
-  userIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.accent, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  userEmail: { color: Colors.text, fontFamily: 'Brand_Body_Bold', fontSize: 14 },
-  userDate: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
-  statusDot: { width: 8, height: 8, borderRadius: 4, marginLeft: 10 },
+  listHeaderContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15, paddingHorizontal: 4 },
+  listHeaderTitle: { fontFamily: 'Brand_Body_Bold', color: Colors.text, fontSize: 16 },
+  
+  userRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 20, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.02)' },
+  userIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.accent, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  userName: { color: Colors.text, fontFamily: 'Brand_Body_Bold', fontSize: 16, marginBottom: 2 },
+  userEmail: { color: 'rgba(255,255,255,0.4)', fontFamily: 'Brand_Body', fontSize: 13 },
+  statusDot: { width: 10, height: 10, borderRadius: 5, marginLeft: 10 },
 
-  // REQUESTS SUB-TABS
-  subTabs: { flexDirection: 'row', marginBottom: 15, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: 2 },
-  subTab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6 },
+  subTabs: { flexDirection: 'row', marginBottom: 20, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 4 },
+  subTab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
   subTabActive: { backgroundColor: 'rgba(255,255,255,0.1)' },
-  subTabText: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
-  subTabTextActive: { color: Colors.text, fontWeight: 'bold' },
+  subTabText: { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontFamily: 'Brand_Body' },
+  subTabTextActive: { color: Colors.text, fontFamily: 'Brand_Body_Bold' },
 
-  // CARDS (Requests)
-  card: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginBottom: 12 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  cardEmail: { color: Colors.accent, fontWeight: 'bold' },
-  cardContent: { color: 'rgba(255,255,255,0.9)', marginBottom: 10, lineHeight: 20 },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between' },
-  cardDate: { color: 'rgba(255,255,255,0.4)', fontSize: 12 },
-  emptyText: { textAlign: 'center', color: 'rgba(255,255,255,0.5)', marginTop: 20 },
+  card: { backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  cardEmail: { color: Colors.text, fontFamily: 'Brand_Body_Bold', fontSize: 15 },
+  actionButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.accent, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, gap: 6 },
+  actionButtonText: { color: Colors.primary, fontFamily: 'Brand_Body_Bold', fontSize: 12 },
+  cardContent: { color: 'rgba(255,255,255,0.7)', marginBottom: 16, lineHeight: 22, fontFamily: 'Brand_Body', fontSize: 15 },
+  cardDate: { color: 'rgba(255,255,255,0.3)', fontSize: 12, fontFamily: 'Brand_Body' },
+  emptyText: { textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: 40, fontFamily: 'Brand_Body' },
 });

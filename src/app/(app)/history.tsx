@@ -1,26 +1,28 @@
-// src/app/(app)/history.tsx
-
-import { useEffect, useState } from "react";
+import { useRouter } from "expo-router";
+import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
   StyleSheet,
   Text,
+  Platform,
   View,
+  Pressable,
 } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { Colors } from "../../constants/colors";
 import i18n from "../../lib/i18n";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../providers/AuthProvider";
 import { Database } from "../../types/database.types";
+import { ScreenWrapper } from "../../components/ScreenWrapper";
 
 type HistoryItem = Database["public"]["Tables"]["verse_history"]["Row"] & {
-  // We add a check to ensure verses is not null
   verses: Database["public"]["Tables"]["verses"]["Row"] | null;
 };
 
 const VerseHistoryItem = ({ item }: { item: HistoryItem }) => {
-  // CHANGED: We now check if the date exists before trying to format it.
   const formattedDate = item.viewed_on
     ? new Date(item.viewed_on).toLocaleDateString("en-US", {
         year: "numeric",
@@ -29,9 +31,8 @@ const VerseHistoryItem = ({ item }: { item: HistoryItem }) => {
       })
     : i18n.t("history.dateNotAvailable");
 
-  // We also check if the linked verse exists
   if (!item.verses) {
-    return null; // Don't render if the verse data is missing
+    return null;
   }
 
   return (
@@ -47,6 +48,7 @@ const VerseHistoryItem = ({ item }: { item: HistoryItem }) => {
 
 export default function HistoryScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -74,47 +76,62 @@ export default function HistoryScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator color={Colors.text} />
-      </View>
+      <ScreenWrapper>
+        <View style={[styles.container, styles.center]}>
+          <ActivityIndicator color={Colors.text} />
+        </View>
+      </ScreenWrapper>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{i18n.t("history.title")}</Text>
-      <FlatList
-        data={history}
-        renderItem={({ item }) => <VerseHistoryItem item={item} />}
-        // CHANGED: We now use the unique 'id' of the history record as the key.
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ paddingHorizontal: 15 }}
-        ListEmptyComponent={() => (
-          <Text style={styles.emptyText}>{i18n.t("history.empty")}</Text>
-        )}
-      />
-    </View>
+    <ScreenWrapper>
+      <KeyboardAvoidingView 
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={{ flex: 1 }}
+      >
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Pressable onPress={() => router.back()} style={styles.backButton}>
+            <Feather name="arrow-left" size={24} color={Colors.text} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Historique</Text>
+          <View style={{width: 24}} />
+        </View>
+        <FlatList
+          data={history}
+          renderItem={({ item }) => <VerseHistoryItem item={item} />}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={{ paddingHorizontal: 15 }}
+          ListEmptyComponent={() => (
+            <Text style={styles.emptyText}>{i18n.t("history.empty")}</Text>
+          )}
+        />
+      </View>
+      </KeyboardAvoidingView>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  // ... (styles remain the same)
   container: {
     flex: 1,
     backgroundColor: Colors.primary,
-    paddingTop: 60,
   },
   center: {
     justifyContent: "center",
     alignItems: "center",
   },
-  title: {
-    fontFamily: "Outfit_700Bold",
-    fontSize: 28,
-    color: Colors.text,
-    textAlign: "center",
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginTop: 20,
     marginBottom: 20,
   },
+  backButton: { padding: 8 },
+  headerTitle: { fontFamily: 'Brand_Heading', fontSize: 20, color: Colors.text },
   itemContainer: {
     backgroundColor: "rgba(0,0,0,0.2)",
     padding: 15,

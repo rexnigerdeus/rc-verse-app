@@ -79,17 +79,17 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="bible" 
+        name="bible"
         options={{
           title: i18n.t("tabs.bible"),
-          href: null,
-          tabBarIcon: ({ color }) => <TabBarIcon name="book" color={color} />, // Example icon
+          tabBarIcon: ({ color }) => <TabBarIcon name="book" color={color} />,
         }}
       />
       <Tabs.Screen
         name="visitations"
         options={{
           title: i18n.t("tabs.visitations"),
+          href: null,
           tabBarIcon: ({ color }) => <TabBarIcon name="sun" color={color} />,
         }}
       />

@@ -1,452 +1,330 @@
-// src/app/(app)/bible.tsx
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import {
-    View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable, Alert, useWindowDimensions, FlatList, SafeAreaView
-} from 'react-native';
-import Modal from 'react-native-modal';
-import * as SQLite from 'expo-sqlite';
-import { Asset } from 'expo-asset';
-import { Colors } from '../../constants/colors';
-import i18n from '../../lib/i18n';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, Modal, SafeAreaView, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { trackEvent } from '../../lib/analytics';
+import { ScreenWrapper } from '../../components/ScreenWrapper';
+import { Colors } from '../../constants/colors';
 
-// --- BIBLE DATA CONSTANTS ---
-
+// --- CONSTANTS ---
 const BIBLE_VERSIONS = [
-    { label: 'King James (Authorized) Version', id: 'eng_kjv' },
-    { label: 'Louis Segond 1910', id: 'fra_lsg' },
-    { label: 'Bible J.N. Darby', id: 'fra_jnd' },
-    // We can now add the other versions when you find their IDs
+    { id: 'NBS', name: 'Nouvelle Segond 2002' },
+    { id: 'FRDBY', name: 'La Bible de Darby 1890' }, 
+    { id: 'FRLSG', name: 'Bible Segond 1910' }, 
+    { id: 'FRPDV17', name: 'Parole de Vie 2017' }, 
+    { id: 'BDS', name: 'La Bible du Semeur 2015' } 
 ];
 
+// Bolls.life utilise des numéros (1 à 66) pour identifier les livres
 const BIBLE_BOOKS = [
-  // Old Testament
-  { name: "Genesis", id: "GEN", chapters: 50 },
-  { name: "Exodus", id: "EXO", chapters: 40 },
-  { name: "Leviticus", id: "LEV", chapters: 27 },
-  { name: "Numbers", id: "NUM", chapters: 36 },
-  { name: "Deuteronomy", id: "DEU", chapters: 34 },
-  { name: "Joshua", id: "JOS", chapters: 24 },
-  { name: "Judges", id: "JDG", chapters: 21 },
-  { name: "Ruth", id: "RUT", chapters: 4 },
-  { name: "1 Samuel", id: "1SA", chapters: 31 },
-  { name: "2 Samuel", id: "2SA", chapters: 24 },
-  { name: "1 Kings", id: "1KI", chapters: 22 },
-  { name: "2 Kings", id: "2KI", chapters: 25 },
-  { name: "1 Chronicles", id: "1CH", chapters: 29 },
-  { name: "2 Chronicles", id: "2CH", chapters: 36 },
-  { name: "Ezra", id: "EZR", chapters: 10 },
-  { name: "Nehemiah", id: "NEH", chapters: 13 },
-  { name: "Esther", id: "EST", chapters: 10 },
-  { name: "Job", id: "JOB", chapters: 42 },
-  { name: "Psalms", id: "PSA", chapters: 150 },
-  { name: "Proverbs", id: "PRO", chapters: 31 },
-  { name: "Ecclesiastes", id: "ECC", chapters: 12 },
-  { name: "Song of Solomon", id: "SNG", chapters: 8 },
-  { name: "Isaiah", id: "ISA", chapters: 66 },
-  { name: "Jeremiah", id: "JER", chapters: 52 },
-  { name: "Lamentations", id: "LAM", chapters: 5 },
-  { name: "Ezekiel", id: "EZK", chapters: 48 },
-  { name: "Daniel", id: "DAN", chapters: 12 },
-  { name: "Hosea", id: "HOS", chapters: 14 },
-  { name: "Joel", id: "JOL", chapters: 3 },
-  { name: "Amos", id: "AMO", chapters: 9 },
-  { name: "Obadiah", id: "OBA", chapters: 1 },
-  { name: "Jonah", id: "JON", chapters: 4 },
-  { name: "Micah", id: "MIC", chapters: 7 },
-  { name: "Nahum", id: "NAM", chapters: 3 },
-  { name: "Habakkuk", id: "HAB", chapters: 3 },
-  { name: "Zephaniah", id: "ZEP", chapters: 3 },
-  { name: "Haggai", id: "HAG", chapters: 2 },
-  { name: "Zechariah", id: "ZEC", chapters: 14 },
-  { name: "Malachi", id: "MAL", chapters: 4 },
-  // New Testament
-  { name: "Matthew", id: "MAT", chapters: 28 },
-  { name: "Mark", id: "MRK", chapters: 16 },
-  { name: "Luke", id: "LUK", chapters: 24 },
-  { name: "John", id: "JHN", chapters: 21 },
-  { name: "Acts", id: "ACT", chapters: 28 },
-  { name: "Romans", id: "ROM", chapters: 16 },
-  { name: "1 Corinthians", id: "1CO", chapters: 16 },
-  { name: "2 Corinthians", id: "2CO", chapters: 13 },
-  { name: "Galatians", id: "GAL", chapters: 6 },
-  { name: "Ephesians", id: "EPH", chapters: 6 },
-  { name: "Philippians", id: "PHP", chapters: 4 },
-  { name: "Colossians", id: "COL", chapters: 4 },
-  { name: "1 Thessalonians", id: "1TH", chapters: 5 },
-  { name: "2 Thessalonians", id: "2TH", chapters: 3 },
-  { name: "1 Timothy", id: "1TI", chapters: 6 },
-  { name: "2 Timothy", id: "2TI", chapters: 4 },
-  { name: "Titus", id: "TIT", chapters: 3 },
-  { name: "Philemon", id: "PHM", chapters: 1 },
-  { name: "Hebrews", id: "HEB", chapters: 13 },
-  { name: "James", id: "JAS", chapters: 5 },
-  { name: "1 Peter", id: "1PE", chapters: 5 },
-  { name: "2 Peter", id: "2PE", chapters: 3 },
-  { name: "1 John", id: "1JN", chapters: 5 },
-  { name: "2 John", id: "2JN", chapters: 1 },
-  { name: "3 John", id: "3JN", chapters: 1 },
-  { name: "Jude", id: "JUD", chapters: 1 },
-  { name: "Revelation", id: "REV", chapters: 22 }
+    { number: 1, name: "Genèse", chapters: 50 }, { number: 2, name: "Exode", chapters: 40 }, 
+    { number: 3, name: "Lévitique", chapters: 27 }, { number: 4, name: "Nombres", chapters: 36 },
+    { number: 5, name: "Deutéronome", chapters: 34 }, { number: 6, name: "Josué", chapters: 24 },
+    { number: 7, name: "Juges", chapters: 21 }, { number: 8, name: "Ruth", chapters: 4 },
+    { number: 9, name: "1 Samuel", chapters: 31 }, { number: 10, name: "2 Samuel", chapters: 24 },
+    { number: 11, name: "1 Rois", chapters: 22 }, { number: 12, name: "2 Rois", chapters: 25 },
+    { number: 13, name: "1 Chroniques", chapters: 29 }, { number: 14, name: "2 Chroniques", chapters: 36 },
+    { number: 15, name: "Esdras", chapters: 10 }, { number: 16, name: "Néhémie", chapters: 13 },
+    { number: 17, name: "Esther", chapters: 10 }, { number: 18, name: "Job", chapters: 42 },
+    { number: 19, name: "Psaumes", chapters: 150 }, { number: 20, name: "Proverbes", chapters: 31 },
+    { number: 21, name: "Ecclésiaste", chapters: 12 }, { number: 22, name: "Cantique des Cant.", chapters: 8 },
+    { number: 23, name: "Ésaïe", chapters: 66 }, { number: 24, name: "Jérémie", chapters: 52 },
+    { number: 25, name: "Lamentations", chapters: 5 }, { number: 26, name: "Ézéchiel", chapters: 48 },
+    { number: 27, name: "Daniel", chapters: 12 }, { number: 28, name: "Osée", chapters: 14 },
+    { number: 29, name: "Joël", chapters: 3 }, { number: 30, name: "Amos", chapters: 9 },
+    { number: 31, name: "Abdias", chapters: 1 }, { number: 32, name: "Jonas", chapters: 4 },
+    { number: 33, name: "Michée", chapters: 7 }, { number: 34, name: "Nahum", chapters: 3 },
+    { number: 35, name: "Habacuc", chapters: 3 }, { number: 36, name: "Sophonie", chapters: 3 },
+    { number: 37, name: "Aggée", chapters: 2 }, { number: 38, name: "Zacharie", chapters: 14 },
+    { number: 39, name: "Malachie", chapters: 4 }, { number: 40, name: "Matthieu", chapters: 28 },
+    { number: 41, name: "Marc", chapters: 16 }, { number: 42, name: "Luc", chapters: 24 },
+    { number: 43, name: "Jean", chapters: 21 }, { number: 44, name: "Actes", chapters: 28 },
+    { number: 45, name: "Romains", chapters: 16 }, { number: 46, name: "1 Corinthiens", chapters: 16 },
+    { number: 47, name: "2 Corinthiens", chapters: 13 }, { number: 48, name: "Galates", chapters: 6 },
+    { number: 49, name: "Éphésiens", chapters: 6 }, { number: 50, name: "Philippiens", chapters: 4 },
+    { number: 51, name: "Colossiens", chapters: 4 }, { number: 52, name: "1 Thessaloniciens", chapters: 5 },
+    { number: 53, name: "2 Thessaloniciens", chapters: 3 }, { number: 54, name: "1 Timothée", chapters: 6 },
+    { number: 55, name: "2 Timothée", chapters: 4 }, { number: 56, name: "Tite", chapters: 3 },
+    { number: 57, name: "Philémon", chapters: 1 }, { number: 58, name: "Hébreux", chapters: 13 },
+    { number: 59, name: "Jacques", chapters: 5 }, { number: 60, name: "1 Pierre", chapters: 5 },
+    { number: 61, name: "2 Pierre", chapters: 3 }, { number: 62, name: "1 Jean", chapters: 5 },
+    { number: 63, name: "2 Jean", chapters: 1 }, { number: 64, name: "3 Jean", chapters: 1 },
+    { number: 65, name: "Jude", chapters: 1 }, { number: 66, name: "Apocalypse", chapters: 22 }
 ];
 
-// --- TYPE DEFINITIONS ---
-// Matches the structure inside data.chapter.content
-type ApiVerseContent = string | { noteId: number }; // Content can be a string or a note object
-
-type ApiVerse = {
-    type: "verse";
-    number: number;
-    content: ApiVerseContent[];
-};
-
-// Matches the top-level API response
-type ScriptureApiResponse = {
-    book: { name: string; /* ...other book properties */ };
-    chapter: {
-        number: number;
-        content: ApiVerse[]; // The verses are here
-        footnotes: any[]; // We can ignore footnotes for now
-    };
-    // ... other properties like 'translation'
-};
-
-// App's internal scripture state (simplified)
-type ScriptureContent = {
-    verses: ApiVerse[]; // We will store the ApiVerse array directly
-    reference: string;
-} | null;
-
-type Book = typeof BIBLE_BOOKS[0];
 type Version = typeof BIBLE_VERSIONS[0];
+type Book = typeof BIBLE_BOOKS[0];
+type Verse = { verse: number; text: string };
 
-// --- COMPONENT ---
 export default function BibleScreen() {
-    const { width } = useWindowDimensions();
-
-    // --- State ---
-    const [selectedVersion, setSelectedVersion] = useState<Version>(BIBLE_VERSIONS[0]);
+    // --- STATE ---
+    const [verses, setVerses] = useState<Verse[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(false);
+    
     const [selectedBook, setSelectedBook] = useState<Book>(BIBLE_BOOKS[0]);
     const [selectedChapter, setSelectedChapter] = useState(1);
-    const [scripture, setScripture] = useState<ScriptureContent>(null);
-    const [loading, setLoading] = useState(true);
-    const [isVersionModalVisible, setVersionModalVisible] = useState(false);
-    const [isSelectorModalVisible, setSelectorModalVisible] = useState(false);
-    const [modalView, setModalView] = useState<'book' | 'chapter'>('book');
-    const [tempSelectedBook, setTempSelectedBook] = useState<Book>(BIBLE_BOOKS[0]);
+    const [selectedVersion, setSelectedVersion] = useState<Version>(BIBLE_VERSIONS[0]); // NOUVEAU
 
-    // --- Data Fetching ---
-    const fetchScripture = useCallback(async (versionId: string, bookId: string, chapter: number) => {
-    setLoading(true);
-    setScripture(null);
+    const [isSelectorVisible, setSelectorVisible] = useState(false);
+    const [selectorStep, setSelectorStep] = useState<'BOOK' | 'CHAPTER' | 'VERSION'>('BOOK'); // NOUVEAU: 'VERSION'
+    const [tempBook, setTempBook] = useState<Book>(BIBLE_BOOKS[0]);
 
-    const apiUrl = `https://bible.helloao.org/api/${versionId}/${bookId}/${chapter}.json`;
-    console.log(`Attempting URL: ${apiUrl}`);
+    // --- FETCH DATA ---
+    const fetchChapter = useCallback(async () => {
+        setIsLoading(true);
+        setError(false);
+        try {
+            // L'URL s'adapte maintenant à la version choisie !
+            const apiUrl = `https://bolls.life/get-chapter/${selectedVersion.id}/${selectedBook.number}/${selectedChapter}/`;
 
-    try {
-        const response = await fetch(apiUrl);
-        const contentType = response.headers.get("content-type");
-
-        if (!response.ok) {
-            // ... (error handling for 404, etc. remains the same)
-             throw new Error(`API request failed with status ${response.status}`);
+            const response = await fetch(apiUrl);
+            
+            if (!response.ok) throw new Error("Erreur réseau");
+            
+            const data = await response.json();
+            
+            if (Array.isArray(data) && data.length > 0) {
+                 const cleanedVerses = data.map((v: any) => ({
+                     verse: v.verse,
+                     text: v.text.replace(/<[^>]+>/g, '').trim()
+                 }));
+                 setVerses(cleanedVerses);
+            } else {
+                 throw new Error("Chapitre vide.");
+            }
+        } catch (err) {
+            console.error("Fetch error:", err);
+            setError(true);
+        } finally {
+            setIsLoading(false);
         }
-        if (!contentType || contentType.indexOf("application/json") === -1) {
-             throw new Error(`Unexpected content type received from API: ${contentType}`);
-        }
+    }, [selectedBook, selectedChapter, selectedVersion]); // NOUVEAU: selectedVersion ajouté ici
 
-        const data: ScriptureApiResponse | { error: string } = await response.json();
-        // console.log("API RESPONSE DATA:", JSON.stringify(data, null, 2)); // You can remove this now
-
-        if ('error' in data) {
-            throw new Error(`API Error: ${data.error}`);
-        }
-
-        // --- THIS IS THE MAIN FIX ---
-        // Check for the verses in the new location: data.chapter.content
-        if (!data.chapter || !data.chapter.content || data.chapter.content.length === 0) {
-             throw new Error(`No verses found for ${bookId} ${chapter} [${versionId}].`);
-        }
-        // --- END FIX ---
-
-        setScripture({
-            verses: data.chapter.content, // Store the array of verse objects
-            reference: `${data.book.name || selectedBook.name} ${chapter} (${selectedVersion.label})`,
-        });
-
-    } catch (error: any) {
-        console.error("API Fetch Error:", error);
-        Alert.alert('Error', i18n.t('bible.error') + `\n${error.message || ''}`);
-        setScripture({ verses: [], reference: `Error: ${error.message}` });
-    } finally {
-        setLoading(false);
-    }
-}, [selectedBook.name, selectedVersion.label]);
-
-    // --- Effects ---
     useEffect(() => {
-        // Fetch scripture using the book's uppercase ID
-        fetchScripture(selectedVersion.id, selectedBook.id, selectedChapter);
-        if (selectedBook && selectedChapter) {
-        trackEvent('bible_read', { book: selectedBook, chapter: selectedChapter });
-    }
-    }, [selectedVersion.id, selectedBook.id, selectedChapter, fetchScripture]);
+        fetchChapter();
+    }, [fetchChapter]);
 
-
-   // --- Handlers ---
-    const handleSelectVersion = (version: Version) => {
-        setSelectedVersion(version);
-        setVersionModalVisible(false);
+    // --- HANDLERS ---
+    const handleNextChapter = () => {
+        if (selectedChapter < selectedBook.chapters) setSelectedChapter(c => c + 1);
+    };
+    const handlePrevChapter = () => {
+        if (selectedChapter > 1) setSelectedChapter(c => c - 1);
     };
 
-    const openSelectorModal = () => {
-        setTempSelectedBook(selectedBook);
-        setModalView('book');
-        setSelectorModalVisible(true);
+    // Ouvre le choix des livres
+    const openBookSelector = () => {
+        setTempBook(selectedBook);
+        setSelectorStep('BOOK');
+        setSelectorVisible(true);
     };
 
-    const handleSelectBookInModal = (book: Book) => {
-        setTempSelectedBook(book);
-        setModalView('chapter');
+    // Ouvre le choix des versions
+    const openVersionSelector = () => {
+        setSelectorStep('VERSION');
+        setSelectorVisible(true);
     };
 
-    const handleSelectChapterInModal = (chapter: number) => {
-        setSelectedBook(tempSelectedBook);
+    const selectBook = (book: Book) => {
+        setTempBook(book);
+        setSelectorStep('CHAPTER');
+    };
+
+    const selectChapter = (chapter: number) => {
+        setSelectedBook(tempBook);
         setSelectedChapter(chapter);
-        setSelectorModalVisible(false);
+        setSelectorVisible(false);
     };
 
-    const goBackToBookSelection = () => {
-        setModalView('book');
+    const selectVersion = (version: Version) => {
+        setSelectedVersion(version);
+        setSelectorVisible(false); // Ferme et recharge automatiquement
     };
 
-    const chapterNumbers = useMemo(() => {
-        return Array.from({ length: tempSelectedBook.chapters }, (_, i) => i + 1);
-    }, [tempSelectedBook]);
-
-    const goToPreviousChapter = () => {
-        if (selectedChapter > 1) {
-            setSelectedChapter(prev => prev - 1);
-        }
-    };
-
-    const goToNextChapter = () => {
-        if (selectedChapter < selectedBook.chapters) {
-             setSelectedChapter(prev => prev + 1);
-        }
-    };
-
-    // --- Memoize HTML Styles ---
-    const tagsStyles = useMemo(() => ({
-        p: { marginBottom: 5, marginTop: 5 },
-        h3: { fontFamily: 'Outfit_700Bold', fontSize: 18, marginBottom: 10, marginTop: 15, textAlign: 'center'}, // This tag might be used by the API
-        strong: { fontFamily: 'Outfit_700Bold', fontSize: 18, textAlign: 'center', marginBottom: 10 }, // This is our manual title
-        sup: { fontFamily: 'Outfit_400Regular', fontSize: 10, lineHeight: 10, color: 'rgba(255,255,255,0.6)' },
-    }), []);
-
-
-   // --- Render UI ---
+    // --- RENDER ---
     return (
-        <SafeAreaView style={styles.container}>
-            {/* Header */}
+        <ScreenWrapper>
+            {/* EN-TÊTE SÉPARÉ */}
             <View style={styles.header}>
-                 <Pressable style={styles.selectorButton} onPress={openSelectorModal}>
-                    <Text style={styles.selectorText}>{`${selectedBook.name} ${selectedChapter}`}</Text>
-                    <Feather name="chevron-down" size={16} color={Colors.text} />
-                 </Pressable>
-                <Pressable style={styles.selectorButton} onPress={() => setVersionModalVisible(true)}>
-                    <Text style={styles.selectorText}>{selectedVersion.label}</Text>
-                    <Feather name="chevron-down" size={16} color={Colors.text} />
+                <View style={styles.headerSelector}>
+                    <Pressable onPress={openBookSelector}>
+                        <Text style={styles.headerTitle}>{selectedBook.name} {selectedChapter}</Text>
+                    </Pressable>
+                    <Pressable onPress={openVersionSelector} style={styles.headerSubtitleRow}>
+                        <Text style={styles.headerSubtitle}>{selectedVersion.name}</Text>
+                        <Feather name="chevron-down" size={14} color={Colors.textSecondary} />
+                    </Pressable>
+                </View>
+                <Pressable style={styles.searchButton} onPress={openBookSelector}>
+                    <Feather name="list" size={20} color={Colors.text} />
                 </Pressable>
             </View>
 
-            {/* Scripture Content */}
-            <ScrollView style={styles.scriptureScroll} contentContainerStyle={styles.scriptureContentContainer}>
-                {loading && <ActivityIndicator color={Colors.text} size="large" style={styles.loader} />}
-
-                {scripture && !loading && (
-                    <View>
-                        <Text style={styles.chapterTitle}>{scripture.reference}</Text>
-
-                        {/* Map over the new 'verses' (ApiVerse) array */}
-                        {scripture.verses.map((verse) => {
-                            // Filter out notes, keep only text strings
-                            const verseText = verse.content
-                                .filter(item => typeof item === 'string')
-                                .join(' '); // Join text parts
-
-                            return (
-                                <Text key={verse.number} style={styles.verseText}>
-                                    <Text style={styles.verseNumber}>{verse.number} </Text>
-                                    {verseText}
-                                </Text>
-                            );
-                        })}
+            {/* CONTENU (Identique...) */}
+            {/* ... gardez votre View de chargement et votre FlatList de versets ici ... */}
+            <View style={{ flex: 1 }}>
+                {isLoading ? (
+                    <View style={styles.centered}><ActivityIndicator size="large" color={Colors.accent} /></View>
+                ) : error ? (
+                    <View style={styles.centered}>
+                        <Feather name="wifi-off" size={32} color={Colors.textSecondary} style={{marginBottom: 10}}/>
+                        <Text style={styles.errorText}>Impossible de charger le chapitre.</Text>
+                        <Pressable style={styles.retryButton} onPress={fetchChapter}>
+                            <Text style={styles.retryText}>Réessayer</Text>
+                        </Pressable>
                     </View>
+                ) : (
+                    <FlatList
+                        data={verses}
+                        keyExtractor={(item) => item.verse.toString()}
+                        contentContainerStyle={styles.scrollContent}
+                        showsVerticalScrollIndicator={false}
+                        renderItem={({ item }) => (
+                            <Text style={styles.verseText}>
+                                <Text style={styles.verseNumber}>{item.verse} </Text>
+                                {item.text}
+                            </Text>
+                        )}
+                        ListFooterComponent={<View style={{ height: 60 }} />} 
+                    />
                 )}
-            </ScrollView>
-
-            {/* Floating Navigation */}
-            <View style={styles.navigationContainer}>
-                 <Pressable
-                    style={[styles.navButton, selectedChapter <= 1 && styles.navButtonDisabled]}
-                    onPress={goToPreviousChapter}
-                    disabled={selectedChapter <= 1} >
-                    <Feather name="arrow-left-circle" size={36} color={selectedChapter <= 1 ? 'rgba(255,255,255,0.3)' : Colors.text} />
-                 </Pressable>
-                 <Pressable
-                     style={[styles.navButton, selectedChapter >= selectedBook.chapters && styles.navButtonDisabled]}
-                     onPress={goToNextChapter}
-                     disabled={selectedChapter >= selectedBook.chapters} >
-                    <Feather name="arrow-right-circle" size={36} color={selectedChapter >= selectedBook.chapters ? 'rgba(255,255,255,0.3)' : Colors.text} />
-                 </Pressable>
             </View>
 
-            {/* Modals */}
-            <Modal isVisible={isVersionModalVisible} onBackdropPress={() => setVersionModalVisible(false)} style={styles.modal}>
-                <View style={styles.modalContent}>
-                  <Text style={styles.modalTitle}>{i18n.t('bible.selectVersion')}</Text>
-                  <FlatList
-                    data={BIBLE_VERSIONS}
-                    keyExtractor={(item) => item.id}
-                    renderItem={({ item }) => (
-                      <Pressable style={styles.modalItem} onPress={() => handleSelectVersion(item)}>
-                        <Text style={styles.modalItemText}>{item.label}</Text>
-                      </Pressable>
-                    )}
-                  />
-                </View>
-            </Modal>
+            {/* BARRE DU BAS (Identique...) */}
+            <View style={styles.bottomBar}>
+                <Pressable onPress={handlePrevChapter} disabled={selectedChapter <= 1} style={[styles.navButton, selectedChapter <= 1 && styles.disabled]}>
+                    <Feather name="chevron-left" size={24} color={Colors.text} />
+                </Pressable>
+                <Text style={styles.bottomBarText}>Chapitre {selectedChapter}</Text>
+                <Pressable onPress={handleNextChapter} disabled={selectedChapter >= selectedBook.chapters} style={[styles.navButton, selectedChapter >= selectedBook.chapters && styles.disabled]}>
+                    <Feather name="chevron-right" size={24} color={Colors.text} />
+                </Pressable>
+            </View>
 
-            {/* NEW Combined Book/Chapter Modal */}
-            <Modal
-                isVisible={isSelectorModalVisible}
-                onBackdropPress={() => setSelectorModalVisible(false)}
-                style={modalView === 'book' ? styles.modal : styles.modalChapter}
-            >
-                <View style={styles.modalContent}>
-                    {modalView === 'book' ? (
-                        <>
-                            <Text style={styles.modalTitle}>{i18n.t('bible.selectBook')}</Text>
+            {/* MODAL MIS À JOUR (Gère Livre, Chapitre, et Version) */}
+            <Modal visible={isSelectorVisible} animationType="slide" transparent={true} onRequestClose={() => setSelectorVisible(false)}>
+                <SafeAreaView style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            {/* Bouton Retour intelligent */}
+                            <Pressable 
+                                onPress={() => setSelectorStep('BOOK')} 
+                                style={{ padding: 10, opacity: selectorStep === 'CHAPTER' ? 1 : 0 }}
+                                disabled={selectorStep !== 'CHAPTER'}
+                            >
+                                <Feather name="arrow-left" size={24} color={Colors.text} />
+                            </Pressable>
+                            
+                            {/* Titre dynamique */}
+                            <Text style={styles.modalTitle}>
+                                {selectorStep === 'VERSION' ? 'Traductions' : selectorStep === 'BOOK' ? 'Choisir un livre' : tempBook.name}
+                            </Text>
+                            
+                            <Pressable onPress={() => setSelectorVisible(false)} style={{ padding: 10 }}>
+                                <Feather name="x" size={24} color={Colors.text} />
+                            </Pressable>
+                        </View>
+
+                        {/* Rendu Dynamique selon l'étape */}
+                        {selectorStep === 'VERSION' ? (
                             <FlatList
-                                key="book-list" // <-- ADD THIS
-                                data={BIBLE_BOOKS}
+                                key="versions"
+                                data={BIBLE_VERSIONS}
                                 keyExtractor={(item) => item.id}
                                 renderItem={({ item }) => (
-                                    <Pressable style={styles.modalItem} onPress={() => handleSelectBookInModal(item)}>
-                                        <Text style={styles.modalItemText}>{item.name}</Text>
+                                    <Pressable style={styles.listItem} onPress={() => selectVersion(item)}>
+                                        <Text style={[
+                                            styles.listItemText, 
+                                            selectedVersion.id === item.id && {color: Colors.accent, fontFamily: 'Brand_Body_Bold'}
+                                        ]}>
+                                            {item.name}
+                                        </Text>
+                                        {selectedVersion.id === item.id && <Feather name="check" size={18} color={Colors.accent} />}
                                     </Pressable>
                                 )}
                             />
-                        </>
-                    ) : ( // Chapter View
-                        <>
-                            <Pressable onPress={goBackToBookSelection} style={styles.modalBackButton}>
-                                <Feather name="chevron-left" size={24} color={Colors.text} />
-                                <Text style={styles.modalTitle} numberOfLines={1} ellipsizeMode='tail'>{`${i18n.t('bible.selectChapter')} - ${tempSelectedBook.name}`}</Text>
-                            </Pressable>
+                        ) : selectorStep === 'BOOK' ? (
                             <FlatList
-                                key="chapter-list" // <-- ADD THIS
-                                data={chapterNumbers}
-                                keyExtractor={(item) => String(item)}
-                                numColumns={5}
-                                contentContainerStyle={styles.chapterGridContainer}
+                                key="books"
+                                data={BIBLE_BOOKS}
+                                keyExtractor={(item) => item.number.toString()}
                                 renderItem={({ item }) => (
-                                    <Pressable style={styles.chapterItem} onPress={() => handleSelectChapterInModal(item)}>
-                                        <Text style={styles.chapterItemText}>{item}</Text>
+                                    <Pressable style={styles.listItem} onPress={() => selectBook(item)}>
+                                        <Text style={styles.listItemText}>{item.name}</Text>
+                                        <Feather name="chevron-right" size={18} color={Colors.textSecondary} />
                                     </Pressable>
                                 )}
                             />
-                        </>
-                    )}
-                </View>
+                        ) : (
+                            <FlatList
+                                key="chapters"
+                                data={Array.from({ length: tempBook.chapters }, (_, i) => i + 1)}
+                                keyExtractor={(item) => item.toString()}
+                                numColumns={5}
+                                contentContainerStyle={styles.chapterGrid}
+                                renderItem={({ item }) => (
+                                    <Pressable style={styles.chapterBox} onPress={() => selectChapter(item)}>
+                                        <Text style={styles.chapterBoxText}>{item}</Text>
+                                    </Pressable>
+                                )}
+                            />
+                        )}
+                    </View>
+                </SafeAreaView>
             </Modal>
-        </SafeAreaView>
+        </ScreenWrapper>
     );
+
 }
 
-// --- Styles ---
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.primary },
+    centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        paddingHorizontal: 24,
         paddingVertical: 15,
-        paddingHorizontal: 20,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(244, 241, 234, 0.1)',
-        backgroundColor: Colors.primary,
+        borderColor: 'rgba(255,255,255,0.05)',
     },
-    selectorButton: {
+    headerSelector: { flex: 1 },
+    headerTitle: { fontFamily: 'Brand_Heading', fontSize: 24, color: Colors.text },
+    headerSubtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+    headerSubtitle: { fontFamily: 'Brand_Body', fontSize: 14, color: Colors.textSecondary },
+    searchButton: { padding: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20 },
+    
+    scrollContent: { paddingHorizontal: 24, paddingTop: 30, paddingBottom: 40 },
+    verseText: { fontFamily: 'Brand_Body', color: Colors.text, fontSize: 18, lineHeight: 32, marginBottom: 16, textAlign: 'left' },
+    verseNumber: { fontFamily: 'Brand_Body_Bold', color: Colors.accent, fontSize: 14 },
+    
+    bottomBar: {
         flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.3)',
-        paddingVertical: 10,
-        paddingHorizontal: 16,
-        borderRadius: 25,
-        marginHorizontal: 3,
-        borderWidth: 1,
-        borderColor: 'rgba(244, 241, 234, 0.1)',
+        paddingHorizontal: 30,
+        paddingVertical: Platform.OS === 'ios' ? 20 : 15,
+        backgroundColor: Colors.primary,
+        borderTopWidth: 1,
+        borderColor: 'rgba(255,255,255,0.05)',
     },
-    selectorText: {
-        fontFamily: 'Brand_Body_Bold',
-        color: Colors.text,
-        fontSize: 14,
-        marginRight: 8,
-    },
-    scriptureScroll: { flex: 1 },
-    scriptureContentContainer: { paddingHorizontal: 20, paddingTop: 15, paddingBottom: 80 },
-    loader: { marginTop: 50 },
-    // Replaced HTML renderer styles with Text styles
-    chapterTitle: { 
-        fontFamily: 'Brand_Heading',
-        fontSize: 26,
-        color: Colors.accent, // Abidjan Clay
-        textAlign: 'center',
-        marginBottom: 25,
-        marginTop: 10,
-    },
-    verseText: { 
-        fontFamily: 'Brand_Heading', // Using Serif for reading feels more "Bible-like"
-        color: Colors.text,
-        fontSize: 19,
-        lineHeight: 32,
-        marginBottom: 15,
-    },
-    verseNumber: { 
-        fontFamily: 'Brand_Body_Bold', 
-        fontSize: 12,
-        color: Colors.accent, // Abidjan Clay for verse numbers
-        marginRight: 6,
-    },
-    navigationContainer: { position: 'absolute', bottom: 20, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
-    navButton: { padding: 5 },
-    navButtonDisabled: { opacity: 0.3 },
-    modal: { justifyContent: 'flex-end', margin: 0 },
-    modalChapter: { justifyContent: 'center', alignItems: 'center', margin: 0 },
-    modalContent: { backgroundColor: Colors.primary, paddingHorizontal: 10, paddingTop: 20, paddingBottom: 30, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%', width: '100%', },
-    modalTitle: { 
-        fontFamily: 'Brand_Heading', 
-        fontSize: 22, 
-        color: Colors.accent, 
-        textAlign: 'center', 
-        marginBottom: 20 
-    },
-    modalItem: { 
-        paddingVertical: 18, 
-        borderBottomWidth: 1, 
-        borderBottomColor: 'rgba(244, 241, 234, 0.1)' 
-    },
-    modalItemText: { 
-        fontFamily: 'Brand_Body', 
-        color: Colors.text, 
-        fontSize: 18, 
-        textAlign: 'center' 
-    },
-    chapterGridContainer: { alignItems: 'center' },
-    chapterItem: { backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 8, padding: 15, margin: 5, width: 50, height: 50, justifyContent: 'center', alignItems: 'center' },
-    chapterItemText: { fontFamily: 'Outfit_400Regular', color: Colors.text, fontSize: 16 },
-    modalBackButton: { flexDirection: 'row', alignItems: 'center', marginBottom: 15, width: '100%', paddingHorizontal: 10 }, // Use width for centering
+    navButton: { padding: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20 },
+    bottomBarText: { fontFamily: 'Brand_Body_Bold', color: Colors.text, fontSize: 16 },
+    disabled: { opacity: 0.2 },
+
+    errorText: { fontFamily: 'Brand_Body', color: Colors.textSecondary, fontSize: 16, marginBottom: 20 },
+    retryButton: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: Colors.accent, borderRadius: 20 },
+    retryText: { fontFamily: 'Brand_Body_Bold', color: Colors.primary },
+
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
+    modalContent: { backgroundColor: Colors.primary, height: '85%', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+    modalTitle: { fontFamily: 'Brand_Heading', fontSize: 18, color: Colors.text },
+    
+    listItem: { flexDirection: 'row', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+    listItemText: { fontFamily: 'Brand_Body', fontSize: 16, color: Colors.text },
+    
+    chapterGrid: { padding: 20, alignItems: 'center' },
+    chapterBox: { width: 55, height: 55, margin: 6, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
+    chapterBoxText: { fontFamily: 'Brand_Body_Bold', fontSize: 16, color: Colors.text },
 });

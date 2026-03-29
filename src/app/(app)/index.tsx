@@ -14,6 +14,7 @@ import {
   Platform,
   LayoutAnimation,
   Alert,
+  KeyboardAvoidingView,
   Dimensions
 } from "react-native";
 import BrandLogo from "../../components/BrandLogo";
@@ -306,6 +307,27 @@ export default function HomeScreen() {
                 </Pressable>
             </Link>
           </MotiView>
+          <MotiView
+            from={{ opacity: 0, translateY: 20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: "timing", duration: 600, delay: 300 }}
+            style={{ width: '100%' }}
+            >
+            <Link href="/visitations" asChild>
+                <Pressable style={styles.visitationRow}>
+                    <View style={styles.meditateIconPlaceholder}>
+                        <Feather name="sun" size={24} color={Colors.text} />
+                    </View>
+                    <View style={styles.meditateContent}>
+                        <Text style={styles.meditateTitle}>Visitations</Text>
+                        <Text style={styles.meditateSubtitle}>Planifiez vos moments de prière</Text>
+                    </View>
+                    <View style={styles.playIconCircle}>
+                          <Ionicons name="arrow-forward" size={18} color={Colors.primary} />
+                    </View>
+                </Pressable>
+            </Link>
+            </MotiView>
 
         </>
       );
@@ -314,294 +336,607 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
-        <ScrollView 
-            contentContainerStyle={styles.contentWrapper}
-            showsVerticalScrollIndicator={false}
-        >
-          
-          <View style={styles.header}>
-            <View>
-                <Text style={styles.greetingText}>{i18n.t("home.greeting")}</Text>
-                <Text style={styles.dateText}>{new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
-            </View>
+    <ScreenWrapper>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }} // Plus besoin de remettre la couleur de fond ou les insets ici !
+      >
+      <View style={styles.container}>
+          <ScrollView 
+              contentContainerStyle={styles.contentWrapper}
+              showsVerticalScrollIndicator={false}
+          >
             
-            <View style={styles.headerRight}>
-                {/* History Icon */}
-                <Link href="/history" asChild>
-                    <Pressable style={styles.iconButton}>
-                        <Feather name="clock" size={20} color={Colors.textSecondary} />
-                    </Pressable>
-                </Link>
-                {/* Profile Icon */}
-                <Pressable style={[styles.iconButton, { marginLeft: 8 }]} onPress={() => router.push('/(app)/profile')}>
-                    <Feather name="user" size={20} color={Colors.textSecondary} />
-                </Pressable>
-            </View>
-          </View>
-
-          {renderContent()}
-
-        </ScrollView>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { 
-      flex: 1, 
-      backgroundColor: Colors.primary 
-  },
-  contentWrapper: { 
-      flexGrow: 1, 
-      paddingHorizontal: 24, 
-      paddingTop: 20, 
-      paddingBottom: 40 
-  },
-  
-  // HEADER
-  header: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between', 
-    alignItems: 'center',
-    marginBottom: 30,
-    marginTop: 10,
-  },
-  headerRight: {
-      flexDirection: 'row',
-  },
-  greetingText: {
-    fontFamily: 'Brand_Heading', 
-    fontSize: 28,
-    color: Colors.text, 
-  },
-  dateText: {
-      fontFamily: 'Brand_Body',
-      fontSize: 14,
-      color: Colors.textSecondary,
-      textTransform: 'capitalize',
-      marginTop: 2,
-  },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22, // Circle
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-
-  // HERO CARD (Atoms Style)
-  card: {
-    width: '100%',
-    backgroundColor: Colors.surface, // Deep slate
-    borderRadius: 32, // Large Squircle
-    padding: 24,
-    marginBottom: 20,
-    position: 'relative',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  cardDecoration: {
-      position: 'absolute',
-      top: -50,
-      right: -50,
-      width: 150,
-      height: 150,
-      borderRadius: 75,
-      backgroundColor: Colors.surfaceHighlight, // Subtle glow
-      opacity: 0.5,
-  },
-  cardHeaderRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 20,
-  },
-  tagContainer: {
-    backgroundColor: Colors.accent, // Sage Green
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  tagText: {
-    fontFamily: 'Brand_Body_Bold',
-    fontSize: 12,
-    color: Colors.primary, 
-    textTransform: 'uppercase',
-  },
-  shareButton: { 
-    padding: 8,
-    backgroundColor: Colors.surfaceHighlight,
-    borderRadius: 20,
-  },
-
-  verseText: {
-    fontFamily: 'Brand_Heading', 
-    fontSize: 26,
-    color: Colors.text,
-    textAlign: 'left',
-    marginBottom: 12,
-    lineHeight: 36,
-  },
-  referenceText: {
-    fontFamily: 'Brand_Body',
-    fontSize: 15,
-    color: Colors.textSecondary,
-    marginBottom: 20,
-  },
-  
-  separator: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginBottom: 20,
-    width: '100%',
-  },
-
-  // ACTION BUTTONS (Pill Style)
-  expandButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: Colors.surfaceHighlight,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 24, // Pill
-  },
-  expandButtonText: {
-    fontFamily: 'Brand_Body_Bold',
-    color: Colors.text,
-    fontSize: 15,
-  },
-  expandIconContainer: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      backgroundColor: Colors.accent,
-      justifyContent: 'center',
-      alignItems: 'center',
-  },
-
-  // EXPANDED CONTENT
-  deepContent: {
-    marginTop: 5,
-  },
-  loadingContainer: {
-      padding: 20, 
-      alignItems: 'center',
-      gap: 10,
-  },
-  loadingText: {
-      color: Colors.textTertiary, 
-      fontSize: 13, 
-      fontFamily: 'Brand_Body'
-  },
-  deepSection: {
-    marginBottom: 24,
-    backgroundColor: 'rgba(0,0,0,0.2)', // Slightly darker for text blocks
-    padding: 16,
-    borderRadius: 20,
-  },
-  deepHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 8,
-  },
-  deepTitle: {
-    fontFamily: 'Brand_Body_Bold',
-    color: Colors.accent,
-    fontSize: 14,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  deepText: {
-    fontFamily: 'Brand_Body',
-    color: Colors.text,
-    fontSize: 16,
-    lineHeight: 26,
-    textAlign: 'left',
-  },
-  deepTextItalic: {
-    fontFamily: 'Brand_Body',
-    fontStyle: 'italic',
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 16,
-    lineHeight: 26,
-    textAlign: 'left',
-  },
-  collapseButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 10,
-    gap: 6,
-  },
-  collapseText: {
-      color: Colors.textSecondary,
-      fontFamily: 'Brand_Body',
-      fontSize: 14,
-  },
-
-  // MEDITATE ROW (Habit Style)
-  meditateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    padding: 16,
-    borderRadius: 28, // Matches card curvature
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  meditateIconPlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 18, // Squircle
-    backgroundColor: Colors.surfaceHighlight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  meditateContent: {
-    flex: 1,
-  },
-  meditateTitle: {
-    fontFamily: 'Brand_Heading',
-    fontSize: 18,
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  meditateSubtitle: {
-    fontFamily: 'Brand_Body',
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-  playIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  // ERROR
-  errorContainer: {
-      alignItems: 'center',
-      gap: 10,
-      marginTop: 50,
-  },
-  errorText: { 
-      color: Colors.error, 
-      fontSize: 16, 
-      textAlign: 'center',
-      fontFamily: 'Brand_Body'
-  },
-});
+            <View style={styles.header}>
+              <View>
+                  <Text style={styles.greetingText}>{i18n.t("home.greeting")}</Text>
+                  <Text style={styles.dateText}>{new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
+              </View>
+              
+                            <View style={styles.headerRight}>
+              
+                              {/* History Icon */}
+              
+                              <Link href="/history" asChild>
+              
+                                  <Pressable style={styles.iconButton}>
+              
+                                      <Feather name="clock" size={20} color={Colors.textSecondary} />
+              
+                                  </Pressable>
+              
+                              </Link>
+              
+                              
+              
+                              {/* Profile Icon */}
+              
+                              <Pressable style={styles.iconButton} onPress={() => router.push('/profile')}>
+              
+                                  <Feather name="user" size={20} color={Colors.textSecondary} />
+              
+                              </Pressable>
+              
+                            </View>
+              
+                          </View>
+              
+              
+              
+                          {renderContent()}
+              
+              
+              
+                        </ScrollView>
+              
+                    </View>
+              
+                    </KeyboardAvoidingView>
+              
+                  </ScreenWrapper>
+              
+                );
+              
+              }
+              
+              
+              
+              const styles = StyleSheet.create({
+              
+                container: { 
+              
+                    flex: 1, 
+              
+                    backgroundColor: Colors.primary 
+              
+                },
+              
+                contentWrapper: { 
+              
+                    flexGrow: 1, 
+              
+                    paddingHorizontal: 24, 
+              
+                    paddingTop: 20, 
+              
+                    paddingBottom: 40 
+              
+                },
+              
+                
+              
+                // HEADER
+              
+                header: {
+              
+                  width: '100%',
+              
+                  flexDirection: 'row',
+              
+                  justifyContent: 'space-between', 
+              
+                  alignItems: 'center',
+              
+                  marginBottom: 30,
+              
+                  marginTop: 10,
+              
+                },
+              
+                headerRight: {
+              
+                    flexDirection: 'row',
+              
+                    gap: 8, 
+              
+                },
+              
+                greetingText: {
+              
+                  fontFamily: 'Brand_Heading', 
+              
+                  fontSize: 28,
+              
+                  color: Colors.text, 
+              
+                },
+              
+                dateText: {
+              
+                    fontFamily: 'Brand_Body',
+              
+                    fontSize: 14,
+              
+                    color: Colors.textSecondary,
+              
+                    textTransform: 'capitalize',
+              
+                    marginTop: 2,
+              
+                },
+              
+                iconButton: {
+              
+                  width: 44,
+              
+                  height: 44,
+              
+                  borderRadius: 22, // Circle
+              
+                  backgroundColor: Colors.surface,
+              
+                  justifyContent: 'center',
+              
+                  alignItems: 'center',
+              
+                  borderWidth: 1,
+              
+                  borderColor: Colors.border,
+              
+                },
+              
+              
+              
+                // HERO CARD (Atoms Style)
+              
+                card: {
+              
+                  width: '100%',
+              
+                  backgroundColor: Colors.surface, // Deep slate
+              
+                  borderRadius: 32, // Large Squircle
+              
+                  padding: 24,
+              
+                  marginBottom: 20,
+              
+                  position: 'relative',
+              
+                  overflow: 'hidden',
+              
+                  borderWidth: 1,
+              
+                  borderColor: Colors.border,
+              
+                },
+              
+                cardDecoration: {
+              
+                    position: 'absolute',
+              
+                    top: -50,
+              
+                    right: -50,
+              
+                    width: 150,
+              
+                    height: 150,
+              
+                    borderRadius: 75,
+              
+                    backgroundColor: Colors.surfaceHighlight, // Subtle glow
+              
+                    opacity: 0.5,
+              
+                },
+              
+                cardHeaderRow: {
+              
+                    flexDirection: 'row',
+              
+                    justifyContent: 'space-between',
+              
+                    alignItems: 'center',
+              
+                    marginBottom: 20,
+              
+                },
+              
+                tagContainer: {
+              
+                  backgroundColor: Colors.accent, // Sage Green
+              
+                  paddingHorizontal: 12,
+              
+                  paddingVertical: 6,
+              
+                  borderRadius: 20,
+              
+                  flexDirection: 'row',
+              
+                  alignItems: 'center',
+              
+                  gap: 6,
+              
+                },
+              
+                tagText: {
+              
+                  fontFamily: 'Brand_Body_Bold',
+              
+                  fontSize: 12,
+              
+                  color: Colors.primary, 
+              
+                  textTransform: 'uppercase',
+              
+                },
+              
+                shareButton: { 
+              
+                  padding: 8,
+              
+                  backgroundColor: Colors.surfaceHighlight,
+              
+                  borderRadius: 20,
+              
+                },
+              
+              
+              
+                verseText: {
+              
+                  fontFamily: 'Brand_Heading', 
+              
+                  fontSize: 26,
+              
+                  color: Colors.text,
+              
+                  textAlign: 'left',
+              
+                  marginBottom: 12,
+              
+                  lineHeight: 36,
+              
+                },
+              
+                referenceText: {
+              
+                  fontFamily: 'Brand_Body',
+              
+                  fontSize: 15,
+              
+                  color: Colors.textSecondary,
+              
+                  marginBottom: 20,
+              
+                },
+              
+                
+              
+                separator: {
+              
+                  height: 1,
+              
+                  backgroundColor: Colors.border,
+              
+                  marginBottom: 20,
+              
+                  width: '100%',
+              
+                },
+              
+              
+              
+                // ACTION BUTTONS (Pill Style)
+              
+                expandButton: {
+              
+                  flexDirection: 'row',
+              
+                  justifyContent: 'space-between',
+              
+                  alignItems: 'center',
+              
+                  backgroundColor: Colors.surfaceHighlight,
+              
+                  paddingVertical: 14,
+              
+                  paddingHorizontal: 20,
+              
+                  borderRadius: 24, // Pill
+              
+                },
+              
+                expandButtonText: {
+              
+                  fontFamily: 'Brand_Body_Bold',
+              
+                  color: Colors.text,
+              
+                  fontSize: 15,
+              
+                },
+              
+                expandIconContainer: {
+              
+                    width: 24,
+              
+                    height: 24,
+              
+                    borderRadius: 12,
+              
+                    backgroundColor: Colors.accent,
+              
+                    justifyContent: 'center',
+              
+                    alignItems: 'center',
+              
+                },
+              
+              
+              
+                // EXPANDED CONTENT
+              
+                deepContent: {
+              
+                  marginTop: 5,
+              
+                },
+              
+                loadingContainer: {
+              
+                    padding: 20, 
+              
+                    alignItems: 'center',
+              
+                    gap: 10,
+              
+                },
+              
+                loadingText: {
+              
+                    color: Colors.textTertiary, 
+              
+                    fontSize: 13, 
+              
+                    fontFamily: 'Brand_Body'
+              
+                },
+              
+                deepSection: {
+              
+                  marginBottom: 24,
+              
+                  backgroundColor: 'rgba(0,0,0,0.2)', // Slightly darker for text blocks
+              
+                  padding: 16,
+              
+                  borderRadius: 20,
+              
+                },
+              
+                deepHeader: {
+              
+                  flexDirection: 'row',
+              
+                  alignItems: 'center',
+              
+                  marginBottom: 10,
+              
+                  gap: 8,
+              
+                },
+              
+                deepTitle: {
+              
+                  fontFamily: 'Brand_Body_Bold',
+              
+                  color: Colors.accent,
+              
+                  fontSize: 14,
+              
+                  textTransform: 'uppercase',
+              
+                  letterSpacing: 0.5,
+              
+                },
+              
+                deepText: {
+              
+                  fontFamily: 'Brand_Body',
+              
+                  color: Colors.text,
+              
+                  fontSize: 16,
+              
+                  lineHeight: 26,
+              
+                  textAlign: 'left',
+              
+                },
+              
+                deepTextItalic: {
+              
+                  fontFamily: 'Brand_Body',
+              
+                  fontStyle: 'italic',
+              
+                  color: 'rgba(255,255,255,0.85)',
+              
+                  fontSize: 16,
+              
+                  lineHeight: 26,
+              
+                  textAlign: 'left',
+              
+                },
+              
+                collapseButton: {
+              
+                  flexDirection: 'row',
+              
+                  justifyContent: 'center',
+              
+                  alignItems: 'center',
+              
+                  paddingVertical: 10,
+              
+                  gap: 6,
+              
+                },
+              
+                collapseText: {
+              
+                    color: Colors.textSecondary,
+              
+                    fontFamily: 'Brand_Body',
+              
+                    fontSize: 14,
+              
+                },
+              
+              
+              
+                // MEDITATE ROW (Habit Style)
+              
+                meditateRow: {
+              
+                  flexDirection: 'row',
+              
+                  alignItems: 'center',
+              
+                  backgroundColor: Colors.surface,
+              
+                  padding: 16,
+              
+                  borderRadius: 28, // Matches card curvature
+              
+                  borderWidth: 1,
+              
+                  borderColor: Colors.border,
+              
+                },
+              
+                visitationRow: {
+              
+                  flexDirection: 'row',
+              
+                  alignItems: 'center',
+              
+                  backgroundColor: Colors.surface,
+              
+                  padding: 16,
+              
+                  borderRadius: 28,
+              
+                  borderWidth: 1,
+              
+                  borderColor: Colors.border,
+              
+                  marginTop: 20,
+              
+                },
+              
+                meditateIconPlaceholder: {
+              
+                  width: 50,
+              
+                  height: 50,
+              
+                  borderRadius: 18, // Squircle
+              
+                  backgroundColor: Colors.surfaceHighlight,
+              
+                  justifyContent: 'center',
+              
+                  alignItems: 'center',
+              
+                  marginRight: 16,
+              
+                },
+              
+                meditateContent: {
+              
+                  flex: 1,
+              
+                },
+              
+                meditateTitle: {
+              
+                  fontFamily: 'Brand_Heading',
+              
+                  fontSize: 18,
+              
+                  color: Colors.text,
+              
+                  marginBottom: 4,
+              
+                },
+              
+                meditateSubtitle: {
+              
+                  fontFamily: 'Brand_Body',
+              
+                  fontSize: 13,
+              
+                  color: Colors.textSecondary,
+              
+                },
+              
+                playIconCircle: {
+              
+                  width: 36,
+              
+                  height: 36,
+              
+                  borderRadius: 18,
+              
+                  backgroundColor: Colors.accent,
+              
+                  justifyContent: 'center',
+              
+                  alignItems: 'center',
+              
+                },
+              
+              
+              
+                // ERROR
+              
+                errorContainer: {
+              
+                    alignItems: 'center',
+              
+                    gap: 10,
+              
+                    marginTop: 50,
+              
+                },
+              
+                errorText: { 
+              
+                    color: Colors.error, 
+              
+                    fontSize: 16, 
+              
+                    textAlign: 'center',
+              
+                    fontFamily: 'Brand_Body'
+              
+                },
+              
+              });
+              
+              

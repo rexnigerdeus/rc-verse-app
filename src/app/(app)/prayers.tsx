@@ -5,12 +5,14 @@ import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  Platform,
 } from "react-native";
 import { Colors } from "../../constants/colors";
 import i18n from "../../lib/i18n";
@@ -18,6 +20,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../providers/AuthProvider";
 import { Database } from "../../types/database.types";
 import { trackEvent } from '../../lib/analytics';
+import { ScreenWrapper } from '../../components/ScreenWrapper';
 
 type PrayerRequest = Database["public"]["Tables"]["prayer_requests"]["Row"];
 
@@ -99,80 +102,87 @@ export default function PrayersScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{i18n.t("prayers.title")}</Text>
-      </View>
+    <ScreenWrapper>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }} // Plus besoin de remettre la couleur de fond ou les insets ici !
+      >
+      <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>{i18n.t("prayers.title")}</Text>
+        </View>
 
-      <View style={styles.formContainer}>
-        <TextInput
-          style={styles.input}
-          placeholder={i18n.t("prayers.placeholder")}
-          placeholderTextColor="rgba(255,255,255,0.5)"
-          value={newRequest}
-          onChangeText={setNewRequest}
-          multiline
-        />
-        <Pressable style={styles.submitButton} onPress={handleSubmit}>
-          <Text style={styles.submitButtonText}>
-            {i18n.t("prayers.submit")}
-          </Text>
-        </Pressable>
-      </View>
+        <View style={styles.formContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder={i18n.t("prayers.placeholder")}
+            placeholderTextColor="rgba(255,255,255,0.5)"
+            value={newRequest}
+            onChangeText={setNewRequest}
+            multiline
+          />
+          <Pressable style={styles.submitButton} onPress={handleSubmit}>
+            <Text style={styles.submitButtonText}>
+              {i18n.t("prayers.submit")}
+            </Text>
+          </Pressable>
+        </View>
 
-      {loading && (
-        <ActivityIndicator color={Colors.text} style={{ marginVertical: 20 }} />
-      )}
+        {loading && (
+          <ActivityIndicator color={Colors.text} style={{ marginVertical: 20 }} />
+        )}
 
-      <View style={styles.listContainer}>
-        <Text style={styles.listTitle}>{i18n.t("prayers.active")}</Text>
-        {activeRequests.length === 0 && !loading ? (
-          <Text style={styles.emptyText}>You have no active requests.</Text>
-        ) : (
-          activeRequests.map((req) => (
-            <View key={req.id} style={styles.requestItem}>
-              <Text style={styles.requestText}>{req.request_text}</Text>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.markAnsweredButton,
-                  pressed && { opacity: 0.7 },
-                ]}
-                onPress={() => handleMarkAsAnswered(req.id)}
+        <View style={styles.listContainer}>
+          <Text style={styles.listTitle}>{i18n.t("prayers.active")}</Text>
+          {activeRequests.length === 0 && !loading ? (
+            <Text style={styles.emptyText}>Vous n'avez aucune requête active.</Text>
+          ) : (
+            activeRequests.map((req) => (
+              <View key={req.id} style={styles.requestItem}>
+                <Text style={styles.requestText}>{req.request_text}</Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.markAnsweredButton,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                  onPress={() => handleMarkAsAnswered(req.id)}
+                >
+                  <Feather name="check-circle" size={16} color={Colors.text} />
+                  <Text style={styles.markAnsweredButtonText}>
+                    {i18n.t("prayers.markAsAnswered")}
+                  </Text>
+                </Pressable>
+              </View>
+            ))
+          )}
+        </View>
+
+        <View style={styles.listContainer}>
+          <Text style={styles.listTitle}>{i18n.t("prayers.answered")}</Text>
+          {answeredRequests.length === 0 && !loading ? (
+            <Text style={styles.emptyText}>
+              Aucunes prières signalées comme exaucées.
+            </Text>
+          ) : (
+            answeredRequests.map((req) => (
+              <View
+                key={req.id}
+                style={[styles.requestItem, styles.answeredItem]}
               >
-                <Feather name="check-circle" size={16} color={Colors.text} />
-                <Text style={styles.markAnsweredButtonText}>
-                  {i18n.t("prayers.markAsAnswered")}
+                <Text style={[styles.requestText, styles.answeredText]}>
+                  {req.request_text}
                 </Text>
-              </Pressable>
-            </View>
-          ))
-        )}
-      </View>
-
-      <View style={styles.listContainer}>
-        <Text style={styles.listTitle}>{i18n.t("prayers.answered")}</Text>
-        {answeredRequests.length === 0 && !loading ? (
-          <Text style={styles.emptyText}>
-            You have no answered prayers yet.
-          </Text>
-        ) : (
-          answeredRequests.map((req) => (
-            <View
-              key={req.id}
-              style={[styles.requestItem, styles.answeredItem]}
-            >
-              <Text style={[styles.requestText, styles.answeredText]}>
-                {req.request_text}
-              </Text>
-              <Text style={styles.answeredDate}>
-                {i18n.t("prayers.answeredOn")}{" "}
-                {new Date(req.fulfilled_at!).toLocaleDateString()}
-              </Text>
-            </View>
-          ))
-        )}
-      </View>
-    </ScrollView>
+                <Text style={styles.answeredDate}>
+                  {i18n.t("prayers.answeredOn")}{" "}
+                  {new Date(req.fulfilled_at!).toLocaleDateString()}
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+      </KeyboardAvoidingView>
+    </ScreenWrapper>
   );
 }
 

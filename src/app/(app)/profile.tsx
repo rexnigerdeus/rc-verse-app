@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../providers/AuthProvider';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
+import { ScreenWrapper } from '../../components/ScreenWrapper';
 
 export default function ProfileScreen() {
   const { session, signOut } = useAuth();
@@ -14,10 +15,10 @@ export default function ProfileScreen() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [suggestion, setSuggestion] = useState('');
   const [sending, setSending] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false); // New state for deletion loader
 
   // User Info Logic
   const metadata = session?.user?.user_metadata;
-  // Fallback: If no name in metadata, capitalize the part before '@' in email
   const rawName = metadata?.first_name || metadata?.name || session?.user?.email?.split('@')[0] || "Utilisateur";
   const displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
   const userEmail = session?.user?.email;
@@ -27,7 +28,6 @@ export default function ProfileScreen() {
     const checkAdminStatus = async () => {
       if (!session?.user?.id) return;
 
-      // Check if user ID exists in the 'app_admins' table
       const { data, error } = await supabase
         .from('app_admins')
         .select('user_id')
@@ -35,7 +35,7 @@ export default function ProfileScreen() {
         .single();
 
       if (data && !error) {
-        setIsAdmin(true); // Show the shield icon
+        setIsAdmin(true); 
       }
     };
     checkAdminStatus();
@@ -54,11 +54,10 @@ export default function ProfileScreen() {
     }
     setSending(true);
 
-    // Insert into 'suggestions' table
     const { error } = await supabase.from('suggestions').insert({
       user_id: session?.user.id,
       content: suggestion,
-      email: userEmail // Useful for admin follow-up
+      email: userEmail 
     });
 
     setSending(false);
@@ -72,11 +71,66 @@ export default function ProfileScreen() {
     }
   };
 
+  // --- 3. DELETE ACCOUNT LOGIC ---
+  const executeDeletion = async () => {
+    setIsDeleting(true);
+    try {
+      // 1. Appel sécurisé à Supabase
+      const { error } = await supabase.rpc('delete_user');
+      if (error) throw error;
+
+      // 2. Déconnexion locale
+      await signOut();
+      router.replace('/(auth)/login'); 
+      
+    } catch (error: any) {
+      console.error("Erreur de suppression:", error);
+      if (Platform.OS === 'web') {
+          window.alert("Impossible de supprimer le compte. Réessayez plus tard.");
+      } else {
+          Alert.alert("Erreur", "Impossible de supprimer le compte. Assurez-vous d'être connecté à internet.");
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    const warningMessage = "Êtes-vous sûr de vouloir supprimer définitivement votre compte ? Toutes vos données seront effacées. Cette action est irréversible.";
+
+    // Sécurité pour tester sur ordinateur (Web)
+    if (Platform.OS === 'web') {
+        const confirmed = window.confirm(warningMessage);
+        if (confirmed) {
+            executeDeletion();
+        }
+        return;
+    }
+
+    // Alerte native pour iOS (App Store) et Android
+    Alert.alert(
+      "Supprimer le compte",
+      warningMessage,
+      [
+        {
+          text: "Annuler",
+          style: "cancel"
+        },
+        {
+          text: "Supprimer",
+          style: "destructive", // Le texte sera rouge sur iOS
+          onPress: executeDeletion
+        }
+      ]
+    );
+  };
+
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
-    >
+    <ScreenWrapper>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }} // Plus besoin de remettre la couleur de fond ou les insets ici !
+      >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         
         {/* HEADER */}
@@ -87,7 +141,6 @@ export default function ProfileScreen() {
           
           <Text style={styles.headerTitle}>Mon Profil</Text>
           
-          {/* Admin Shield (Visible only if isAdmin is true) */}
           {isAdmin ? (
             <Pressable 
                 onPress={() => router.push('/(app)/admin_dashboard')} 
@@ -106,7 +159,6 @@ export default function ProfileScreen() {
             <Feather name="user" size={40} color={Colors.primary} />
           </View>
           <Text style={styles.nameText}>{displayName}</Text>
-          {/* Email is hidden visually but available in logic */}
         </View>
 
         {/* SUGGESTION BOX */}
@@ -137,14 +189,31 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
-        {/* LOGOUT */}
-        <Pressable style={styles.logoutButton} onPress={handleLogout}>
-          <Feather name="log-out" size={20} color="#ff6b6b" />
-          <Text style={styles.logoutText}>Se déconnecter</Text>
-        </Pressable>
+        {/* ACCOUNT ACTIONS */}
+        <View style={styles.actionsContainer}>
+            {/* LOGOUT */}
+            <Pressable style={styles.logoutButton} onPress={handleLogout}>
+                <Feather name="log-out" size={20} color={Colors.text} />
+                <Text style={styles.logoutText}>Se déconnecter</Text>
+            </Pressable>
+
+            {/* DELETE ACCOUNT */}
+            <Pressable 
+                style={[styles.deleteButton, isDeleting && styles.buttonDisabled]} 
+                onPress={handleDeleteAccount}
+                disabled={isDeleting}
+            >
+                {isDeleting ? (
+                     <ActivityIndicator color="#EF5350" />
+                ) : (
+                    <Text style={styles.deleteText}>Supprimer le compte</Text>
+                )}
+            </Pressable>
+        </View>
 
       </ScrollView>
     </KeyboardAvoidingView>
+    </ScreenWrapper>
   );
 }
 
@@ -162,7 +231,6 @@ const styles = StyleSheet.create({
   backButton: { padding: 8 },
   headerTitle: { fontFamily: 'Brand_Heading', fontSize: 20, color: Colors.text },
   
-  // Admin Button Style
   adminButton: { 
     padding: 8, 
     backgroundColor: 'rgba(255,255,255,0.1)', 
@@ -223,15 +291,28 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.7 },
   sendButtonText: { fontFamily: 'Brand_Body_Bold', color: Colors.primary, fontSize: 16 },
 
+  actionsContainer: {
+      gap: 16,
+      marginTop: 10,
+  },
   logoutButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 10,
     padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,107,107, 0.3)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 12,
   },
-  logoutText: { fontFamily: 'Brand_Body_Bold', color: '#ff6b6b', fontSize: 16 },
+  logoutText: { fontFamily: 'Brand_Body_Bold', color: Colors.text, fontSize: 16 },
+  
+  deleteButton: {
+    paddingVertical: 10, // Keep some vertical space for tapping
+    alignItems: 'center', // Center the text
+  },
+  deleteText: { 
+    fontFamily: 'Brand_Body', 
+    color: '#EF5350', 
+    fontSize: 14 
+  }, // Matching red text
 });

@@ -1,16 +1,15 @@
-import React, { useState, useEffect, useRef, Suspense, useLayoutEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ImageBackground, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import { MotiView, AnimatePresence } from 'moti';
-import { Canvas } from '@react-three/fiber';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
+// CORRECTION ICI : Ajout de withSequence et withDelay
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, withSequence, withDelay } from 'react-native-reanimated';
 
-import { Colors } from '../../constants/colors';
+import { useTheme } from '../../providers/ThemeProvider';
 import i18n from '../../lib/i18n';
-import MeditationScene from '../../components/MeditationScene'; 
 import { trackEvent } from '../../lib/analytics';
 
 const STORAGE_KEY_VERSE = 'revival_daily_verse_data_v3';
@@ -22,30 +21,64 @@ const TRACKS = [
     { id: '3', title: 'Dans ses parvis', file: require('../../assets/audio/dans-ses-parvis.mp3') },
 ];
 
-const BreathingCircle = () => {
-    const scale = useSharedValue(1);
-    const opacity = useSharedValue(0.3);
+const Particle = ({ angle, radius, delay, size, color }: any) => {
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius;
+
+    const scale = useSharedValue(0.3);
+    const opacity = useSharedValue(0.0);
 
     useEffect(() => {
-        scale.value = withRepeat(
-            withTiming(1.5, { duration: 4000, easing: Easing.inOut(Easing.ease) }),
-            -1, true
-        );
-        opacity.value = withRepeat(
-            withTiming(0.6, { duration: 4000, easing: Easing.inOut(Easing.ease) }),
-            -1, true
-        );
-    }, []);
+        setTimeout(() => {
+            opacity.value = withRepeat(
+                withSequence(
+                    withTiming(0.8, { duration: 4000, easing: Easing.inOut(Easing.ease) }),
+                    withTiming(0.1, { duration: 4000, easing: Easing.inOut(Easing.ease) })
+                ),
+                -1, false 
+            );
+
+            scale.value = withRepeat(
+                withSequence(
+                    withDelay(2000, withTiming(1.8, { duration: 12000, easing: Easing.inOut(Easing.ease) })),
+                    withTiming(0.3, { duration: 10000, easing: Easing.inOut(Easing.ease) })
+                ),
+                -1, false
+            );
+        }, delay);
+    }, [delay]);
 
     const animatedStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: scale.value }],
+        transform: [{ translateX: x }, { translateY: y }, { scale: scale.value }],
         opacity: opacity.value,
     }));
 
     return (
-        <Animated.View style={[styles.breathingCircle, animatedStyle]}>
-            <View style={styles.breathingCore} />
-        </Animated.View>
+        <Animated.View 
+            style={[
+                { position: 'absolute', width: size, height: size, borderRadius: size / 2, backgroundColor: color }, 
+                animatedStyle
+            ]} 
+        />
+    );
+}
+
+const RelaxingDots = ({ colors }: { colors: any }) => {
+    const particles = Array.from({ length: 30 }).map((_, i) => ({
+        id: i,
+        angle: (i * Math.PI * 2) / 30 + (Math.random() * 0.5),
+        radius: 40 + Math.random() * 110, 
+        delay: Math.random() * 8000,      
+        size: 3 + Math.random() * 6,      
+    }));
+
+    return (
+        <View style={styles.constellationContainer}>
+            <View style={[styles.centerAnchor, { backgroundColor: colors.accent }]} />
+            {particles.map(p => (
+                <Particle key={p.id} {...p} color={colors.textSecondary} />
+            ))}
+        </View>
     );
 };
 
@@ -54,22 +87,20 @@ export default function MeditateScreen() {
     const router = useRouter();
     const navigation = useNavigation();
     
-    // --- STATE ---
+    const { colors, isDark } = useTheme();
+    const dynamicStyles = createStyles(colors, isDark);
+    
     const [verse, setVerse] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    
     const [step, setStep] = useState<'duration' | 'playlist' | 'active'>('duration');
     const [selectedDuration, setSelectedDuration] = useState(0);
     const [selectedTrack, setSelectedTrack] = useState<typeof TRACKS[0] | null>(null);
-    
     const [timeLeft, setTimeLeft] = useState(0);
     const [sound, setSound] = useState<Audio.Sound | null>(null);
 
-    // We use a ref to track sound for cleanup because closures in useEffect can be stale
     const soundRef = useRef<Audio.Sound | null>(null);
     const timerRef = useRef<any>(null);
 
-    // 1. Load Verse Data
     useEffect(() => {
         const loadContent = async () => {
             setLoading(true);
@@ -91,13 +122,10 @@ export default function MeditateScreen() {
         loadContent();
     }, []);
 
-    // 2. AUDIO CLEANUP FIX (Stop music when leaving screen)
     useFocusEffect(
         useCallback(() => {
             return () => {
-                // This runs when the screen loses focus (user leaves)
                 if (soundRef.current) {
-                    console.log("Leaving screen: Stopping audio");
                     soundRef.current.stopAsync();
                     soundRef.current.unloadAsync();
                     soundRef.current = null;
@@ -108,7 +136,6 @@ export default function MeditateScreen() {
         }, [])
     );
 
-    // 3. NAV BAR FIX
     useLayoutEffect(() => {
         const parent = navigation.getParent();
         if (parent) {
@@ -124,7 +151,6 @@ export default function MeditateScreen() {
         };
     }, [step, navigation]);
 
-    // 4. Timer Logic
     useEffect(() => {
         if (step === 'active' && timeLeft > 0) {
             timerRef.current = setInterval(() => {
@@ -132,20 +158,24 @@ export default function MeditateScreen() {
             }, 1000);
         } else if (timeLeft === 0 && step === 'active') {
             handleStop();
-            Alert.alert(i18n.t('common.done') || "Terminé", "Votre session est terminée.");
+            // NOUVELLE ALERTE REDIRIGEANT VERS LE CARNET
+            Alert.alert(
+                "Session terminée", 
+                "Votre esprit est apaisé. Souhaitez-vous noter vos pensées ou révélations ?",
+                [
+                    { text: "Plus tard", style: "cancel" },
+                    { text: "Ouvrir mon carnet", onPress: () => router.push('/journal') }
+                ]
+            );
         }
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
     }, [step, timeLeft]);
 
-    // 5. Audio Logic
     const playSound = async (trackFile: any) => {
         try {
-            if (soundRef.current) {
-                await soundRef.current.unloadAsync();
-            }
-
+            if (soundRef.current) await soundRef.current.unloadAsync();
             await Audio.setAudioModeAsync({
                 playsInSilentModeIOS: true,
                 staysActiveInBackground: true,
@@ -153,14 +183,12 @@ export default function MeditateScreen() {
             });
 
             const { sound: newSound } = await Audio.Sound.createAsync(
-                trackFile, 
-                { shouldPlay: true, isLooping: true, volume: 0.5 }
+                trackFile, { shouldPlay: true, isLooping: true, volume: 0.5 }
             );
             
-            soundRef.current = newSound; // Update Ref
-            setSound(newSound); // Update State (for UI if needed)
+            soundRef.current = newSound; 
+            setSound(newSound); 
         } catch (error) {
-            console.log("Audio Error:", error);
             Alert.alert("Erreur Audio", "Impossible de jouer le son.");
         }
     };
@@ -175,15 +203,11 @@ export default function MeditateScreen() {
         setSelectedTrack(track);
         setStep('active'); 
         playSound(track.file);
-
         trackEvent('meditation_start', { track: track.title, duration: selectedDuration });
     };
 
     const handleStop = async () => {
-        // Check if they actually finished (timeLeft is 0) or just stopped early
-        if (timeLeft === 0) {
-            trackEvent('meditation_complete', { duration: selectedDuration });
-        }
+        if (timeLeft === 0) trackEvent('meditation_complete', { duration: selectedDuration });
 
         setStep('duration'); 
         setSelectedTrack(null);
@@ -204,343 +228,296 @@ export default function MeditateScreen() {
     };
 
     if (loading) {
-        return <View style={styles.container}><ActivityIndicator color={Colors.accent} /></View>;
+        return <View style={dynamicStyles.container}><ActivityIndicator color={colors.accent} /></View>;
     }
 
     return (
-        <View style={styles.container}>
-            {/* --- IMMERSIVE LAYER --- */}
-            {step === 'active' && (
-                <MotiView 
-                    from={{ opacity: 0 }} 
-                    animate={{ opacity: 1 }} 
-                    transition={{ type: 'timing', duration: 2000 }}
-                    style={styles.immersiveBackground}
-                >
-                    <Suspense fallback={null}>
-                        <Canvas camera={{ position: [0, 0, 1.5] }}>
-                            <MeditationScene />
-                        </Canvas>
-                    </Suspense>
-                </MotiView>
+        <View style={dynamicStyles.container}>
+            
+            {step !== 'active' && (
+                <View style={dynamicStyles.header}>
+                    <Text style={dynamicStyles.title}>{i18n.t('tabs.meditate') || "Méditation"}</Text>
+                    <Pressable onPress={() => router.back()} style={dynamicStyles.closeButton}>
+                        <Feather name="x" size={24} color={colors.text} />
+                    </Pressable>
+                </View>
             )}
 
-            {/* --- UI LAYER --- */}
-            <ImageBackground 
-                source={step !== 'active' ? require('../../assets/images/noise.png') : undefined} 
-                style={styles.uiContainer} 
-                imageStyle={{ opacity: 0.1 }}
-            >
-                
-                {/* Header (Hidden in Immersion) */}
-                {step !== 'active' && (
-                    <View style={styles.header}>
-                        <Text style={styles.title}>{i18n.t('tabs.meditate') || "Méditation"}</Text>
-                        <Pressable onPress={() => router.back()} style={styles.closeButton}>
-                            <Feather name="x" size={24} color={Colors.text} />
-                        </Pressable>
-                    </View>
-                )}
-
-                <AnimatePresence mode='wait'>
-                    {/* --- STEP 1: DURATION (Fixed Spacing) --- */}
-                    {step === 'duration' && (
-                        <MotiView 
-                            key="step1"
-                            from={{ opacity: 0, scale: 0.9 }} 
-                            animate={{ opacity: 1, scale: 1 }} 
-                            exit={{ opacity: 0, scale: 0.9 }}
-                            style={styles.centeredStepContainer} 
-                        >
-                            {verse && (
-                                <View style={styles.verseContainer}>
-                                    <Text style={styles.verseText}>"{verse.text}"</Text>
-                                    <Text style={styles.verseRef}>{verse.book} {verse.chapter}:{verse.verse_number}</Text>
-                                </View>
-                            )}
-
-                            <View style={styles.selectionContainer}>
-                                <Text style={styles.instructionText}>Choisissez une durée :</Text>
-                                <View style={styles.buttonsContainer}>
-                                    {[15, 30, 60].map((min) => (
-                                        <Pressable key={min} style={styles.timeButton} onPress={() => handleDurationSelect(min)}>
-                                            <Text style={styles.timeButtonText}>{min} min</Text>
-                                        </Pressable>
-                                    ))}
-                                </View>
+            <AnimatePresence mode='wait'>
+                {step === 'duration' && (
+                    <MotiView 
+                        key="step1"
+                        from={{ opacity: 0, scale: 0.95 }} 
+                        animate={{ opacity: 1, scale: 1 }} 
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        style={dynamicStyles.stepContainer} 
+                    >
+                        {verse && (
+                            <View style={dynamicStyles.verseContainer}>
+                                <Text style={dynamicStyles.verseText}>"{verse.text}"</Text>
+                                <Text style={dynamicStyles.verseRef}>{verse.book} {verse.chapter}:{verse.verse_number}</Text>
                             </View>
-                        </MotiView>
-                    )}
+                        )}
 
-                    {/* --- STEP 2: PLAYLIST --- */}
-                    {step === 'playlist' && (
-                        <MotiView
-                            key="step2"
-                            from={{ opacity: 0, translateX: 50 }} 
-                            animate={{ opacity: 1, translateX: 0 }} 
-                            exit={{ opacity: 0, translateX: -50 }}
-                            style={styles.fullScreenStepContainer}
-                        >
-                             <View style={styles.playlistHeader}>
-                                <Pressable onPress={() => setStep('duration')} style={{padding: 5}}>
-                                    <Feather name="arrow-left" size={24} color={Colors.accent} />
-                                </Pressable>
-                                <View>
-                                    <Text style={styles.playlistTitle}>Bibliothèque du Ciel</Text>
-                                    <Text style={styles.playlistSubtitle}>Choisissez votre atmosphère</Text>
-                                </View>
-                             </View>
-
-                             <ScrollView contentContainerStyle={styles.trackList} showsVerticalScrollIndicator={false}>
-                                {TRACKS.map((track) => (
+                        <View style={dynamicStyles.selectionContainer}>
+                            <Text style={dynamicStyles.instructionText}>Choisissez une durée :</Text>
+                            <View style={dynamicStyles.buttonsContainer}>
+                                {[15, 30, 60].map((min) => (
                                     <Pressable 
-                                        key={track.id} 
-                                        style={styles.trackItem} 
-                                        onPress={() => handleTrackSelect(track)}
+                                        key={min} 
+                                        style={({pressed}) => [dynamicStyles.timeButton, pressed && {opacity: 0.8}]} 
+                                        onPress={() => handleDurationSelect(min)}
                                     >
-                                        <View style={styles.trackIcon}>
-                                            <Feather name="music" size={20} color={Colors.primary} />
-                                        </View>
-                                        <View style={{flex: 1}}>
-                                            <Text style={styles.trackTitle}>{track.title}</Text>
-                                            <Text style={styles.trackAuthor}>{GLOBAL_AUTHOR}</Text>
-                                        </View>
-                                        <Feather name="play-circle" size={24} color={Colors.accent} />
+                                        <Text style={dynamicStyles.timeButtonText}>{min} min</Text>
                                     </Pressable>
                                 ))}
-                             </ScrollView>
-                        </MotiView>
-                    )}
-
-                    {/* --- STEP 3: IMMERSION (Fixed Jump) --- */}
-                    {step === 'active' && (
-                        <MotiView 
-                            key="step3"
-                            from={{ opacity: 0 }} 
-                            animate={{ opacity: 1 }}
-                            transition={{ type: 'timing', duration: 1500 }}
-                            // FIX: Absolute fill ensures it snaps to edges instantly
-                            style={[StyleSheet.absoluteFillObject, styles.activeContainer]}
-                        >
-                            {/* TOP: Track Info */}
-                            <View style={styles.activeTrackInfo}>
-                                <Text style={styles.activeTrackTitle}>{selectedTrack?.title}</Text>
-                                <Text style={styles.activeTrackAuthor}>{GLOBAL_AUTHOR}</Text>
                             </View>
+                        </View>
+                    </MotiView>
+                )}
 
-                            {/* CENTER: Breathing */}
-                            <View style={styles.centerFocus}>
-                                <BreathingCircle />
+                {step === 'playlist' && (
+                    <MotiView
+                        key="step2"
+                        from={{ opacity: 0, translateX: 30 }} 
+                        animate={{ opacity: 1, translateX: 0 }} 
+                        exit={{ opacity: 0, translateX: -30 }}
+                        style={dynamicStyles.stepContainer}
+                    >
+                         <View style={dynamicStyles.playlistHeader}>
+                            <Pressable onPress={() => setStep('duration')} style={{padding: 5}}>
+                                <Feather name="arrow-left" size={20} color={colors.textSecondary} />
+                            </Pressable>
+                            <View>
+                                <Text style={dynamicStyles.playlistTitle}>Bibliothèque du Ciel</Text>
+                                <Text style={dynamicStyles.playlistSubtitle}>Choisissez votre atmosphère</Text>
                             </View>
+                         </View>
 
-                            {/* BOTTOM: Controls */}
-                            <View style={styles.bottomControls}>
-                                <Text style={styles.timerSmall}>{formatTime(timeLeft)}</Text>
-                                
-                                <Pressable style={styles.subtleStopButton} onPress={handleStop}>
-                                    <Feather name="stop-circle" size={20} color="rgba(255,255,255,0.5)" />
-                                    <Text style={styles.subtleStopText}>Fin</Text>
+                         <ScrollView contentContainerStyle={dynamicStyles.trackList} showsVerticalScrollIndicator={false}>
+                            {TRACKS.map((track) => (
+                                <Pressable 
+                                    key={track.id} 
+                                    style={({pressed}) => [dynamicStyles.trackItem, pressed && {opacity: 0.8}]} 
+                                    onPress={() => handleTrackSelect(track)}
+                                >
+                                    <View style={dynamicStyles.trackIcon}>
+                                        <Feather name="music" size={18} color={colors.primary} />
+                                    </View>
+                                    <View style={{flex: 1}}>
+                                        <Text style={dynamicStyles.trackTitle}>{track.title}</Text>
+                                        <Text style={dynamicStyles.trackAuthor}>{GLOBAL_AUTHOR}</Text>
+                                    </View>
+                                    <Feather name="play-circle" size={20} color={colors.textTertiary} />
                                 </Pressable>
-                            </View>
-                        </MotiView>
-                    )}
-                </AnimatePresence>
+                            ))}
+                         </ScrollView>
+                    </MotiView>
+                )}
 
-            </ImageBackground>
+                {step === 'active' && (
+                    <MotiView 
+                        key="step3"
+                        from={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }}
+                        transition={{ type: 'timing', duration: 1500 }}
+                        style={dynamicStyles.activeContainer}
+                    >
+                        <View style={dynamicStyles.activeTrackInfo}>
+                            <Text style={dynamicStyles.activeTrackTitle}>{selectedTrack?.title}</Text>
+                            <Text style={dynamicStyles.activeTrackAuthor}>{GLOBAL_AUTHOR}</Text>
+                        </View>
+
+                        <View style={dynamicStyles.centerFocus}>
+                            <RelaxingDots colors={colors} />
+                        </View>
+
+                        <View style={dynamicStyles.bottomControls}>
+                            <Text style={dynamicStyles.timerText}>{formatTime(timeLeft)}</Text>
+                            
+                            <Pressable style={dynamicStyles.quitButton} onPress={handleStop}>
+                                <Feather name="x" size={16} color={colors.text} />
+                                <Text style={dynamicStyles.quitButtonText}>Quitter</Text>
+                            </Pressable>
+                        </View>
+                    </MotiView>
+                )}
+            </AnimatePresence>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.primary },
+    constellationContainer: {
+        width: 300, 
+        height: 300, 
+        justifyContent: 'center', 
+        alignItems: 'center'
+    },
+    centerAnchor: {
+        width: 8, 
+        height: 8, 
+        borderRadius: 4, 
+        opacity: 0.3 
+    }
+});
+
+const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+    container: { 
+        flex: 1, 
+        backgroundColor: colors.primary,
+    },
     
-    immersiveBackground: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: '#000000',
-        zIndex: 0, 
-    },
-    uiContainer: {
-        flex: 1,
-        padding: 20,
-        zIndex: 1, 
-    },
-
-    centeredStepContainer: {
-        flex: 1,
-        width: '100%',
-        alignItems: 'center',
-        // justifyContent: 'center', <--- Removed to fix spacing gap
-        paddingTop: 20, // Push content slightly up near title
-    },
-    fullScreenStepContainer: {
-        flex: 1,
-        width: '100%',
-    },
-
-    // Header (Fixed Spacing)
     header: { 
-        marginTop: 40, 
-        marginBottom: 5, // <--- Reduced from 10 or 30
+        marginTop: 60, 
+        marginBottom: 10,
         width: '100%', 
         alignItems: 'center', 
         justifyContent: 'center', 
         position: 'relative',
         minHeight: 40
     },
-    title: { fontFamily: 'Brand_Heading', fontSize: 28, color: Colors.text, letterSpacing: 1 },
-    closeButton: { position: 'absolute', right: 0, padding: 10 },
+    title: { 
+        fontFamily: 'Brand_Heading', 
+        fontSize: 20, 
+        color: colors.text, 
+    },
+    closeButton: { 
+        position: 'absolute', 
+        right: 20, 
+        padding: 10 
+    },
     
-    // Verse (Fixed Spacing)
+    stepContainer: {
+        flex: 1,
+        width: '100%',
+        paddingHorizontal: 24,
+    },
+
     verseContainer: { 
-        marginTop: 10, // <--- Closer to title
-        marginBottom: 30, 
-        alignItems: 'center' 
+        marginTop: 20,
+        marginBottom: 40, 
+        alignItems: 'center',
+        paddingHorizontal: 10,
     },
     verseText: { 
         fontFamily: 'Brand_Heading', 
         fontSize: 22, 
-        color: Colors.text, 
+        color: colors.text, 
         textAlign: 'center', 
-        marginBottom: 10, 
+        marginBottom: 16, 
         lineHeight: 32 
     },
     verseRef: { 
         fontFamily: 'Brand_Body_Bold', 
-        fontSize: 14, 
-        color: Colors.accent, 
+        fontSize: 13, 
+        color: colors.accent, 
         textTransform: 'uppercase', 
-        letterSpacing: 1 
+        letterSpacing: 1.5 
     },
 
     selectionContainer: { width: '100%', alignItems: 'center' },
-    instructionText: { fontFamily: 'Brand_Body', color: 'rgba(244, 241, 234, 0.7)', marginBottom: 20 },
-    buttonsContainer: { width: '100%', gap: 15 },
+    instructionText: { 
+        fontFamily: 'Brand_Body', 
+        color: colors.textSecondary, 
+        marginBottom: 20,
+        fontSize: 14
+    },
+    buttonsContainer: { width: '100%', gap: 12 },
     timeButton: {
-        backgroundColor: 'rgba(0,0,0,0.3)',
-        paddingVertical: 20,
+        backgroundColor: colors.surfaceBase,
+        paddingVertical: 18,
         width: '100%',
-        borderRadius: 15,
+        borderRadius: 16,
         borderWidth: 1,
-        borderColor: Colors.accent,
+        borderColor: colors.border,
         alignItems: 'center',
     },
-    timeButtonText: { fontFamily: 'Brand_Body_Bold', fontSize: 18, color: Colors.text },
+    timeButtonText: { fontFamily: 'Brand_Body_Bold', fontSize: 16, color: colors.text },
 
-    // PLAYLIST
     playlistHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 30,
-        gap: 15,
+        gap: 12,
         marginTop: 20 
     },
-    playlistTitle: { fontFamily: 'Brand_Heading', fontSize: 24, color: Colors.text },
-    playlistSubtitle: { fontFamily: 'Brand_Body', fontSize: 14, color: 'rgba(255,255,255,0.6)' },
+    playlistTitle: { fontFamily: 'Brand_Heading', fontSize: 20, color: colors.text },
+    playlistSubtitle: { fontFamily: 'Brand_Body', fontSize: 13, color: colors.textSecondary },
     
-    trackList: { gap: 15, paddingBottom: 50 },
+    trackList: { gap: 12, paddingBottom: 50 },
     trackItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        padding: 15,
-        borderRadius: 15,
+        backgroundColor: colors.surfaceBase,
+        padding: 16,
+        borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
-        gap: 15,
-        marginBottom: 12
+        borderColor: colors.border,
+        gap: 16,
     },
     trackIcon: {
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: Colors.accent,
+        backgroundColor: colors.accent,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    trackTitle: { fontFamily: 'Brand_Body_Bold', fontSize: 16, color: Colors.text },
-    trackAuthor: { fontFamily: 'Brand_Body', fontSize: 12, color: 'rgba(255,255,255,0.5)' },
+    trackTitle: { fontFamily: 'Brand_Body_Bold', fontSize: 15, color: colors.text, marginBottom: 2 },
+    trackAuthor: { fontFamily: 'Brand_Body', fontSize: 13, color: colors.textSecondary },
 
-    // ACTIVE STATE (Fixed Jump)
     activeContainer: {
-        // Absolute position logic handles the layout now
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: colors.primary, 
         justifyContent: 'space-between', 
-        paddingBottom: 40,
-        paddingTop: 60, 
-        paddingHorizontal: 20, // Add padding because it's absolute filled
+        paddingBottom: 60,
+        paddingTop: 80, 
+        paddingHorizontal: 24,
     },
     activeTrackInfo: {
         alignItems: 'center',
-        marginTop: 20,
     },
     activeTrackTitle: {
         fontFamily: 'Brand_Heading',
         fontSize: 20,
-        color: Colors.text,
-        marginBottom: 4,
-        textShadowColor: 'rgba(0,0,0,0.5)',
-        textShadowRadius: 10,
+        color: colors.text,
+        marginBottom: 6,
     },
     activeTrackAuthor: {
         fontFamily: 'Brand_Body',
-        fontSize: 14,
-        color: 'rgba(255,255,255,0.6)',
-        letterSpacing: 1,
+        fontSize: 13,
+        color: colors.textSecondary,
     },
     centerFocus: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    breathingCircle: {
-        width: 150,
-        height: 150,
-        borderRadius: 75,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    breathingCore: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        shadowColor: "#fff",
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
-    },
-    breatheText: {
-        position: 'absolute',
-        fontFamily: 'Brand_Body',
-        color: 'rgba(255,255,255,0.3)',
-        fontSize: 14,
-        letterSpacing: 3,
-        bottom: -40,
-    },
     bottomControls: {
         alignItems: 'center',
-        gap: 20,
+        gap: 24,
     },
-    timerSmall: {
+    timerText: {
         fontFamily: 'Brand_Body',
-        fontSize: 24,
-        color: 'rgba(255,255,255,0.6)',
+        fontSize: 28,
+        color: colors.text,
         letterSpacing: 2,
     },
-    subtleStopButton: {
+    quitButton: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        padding: 10,
-        backgroundColor: 'rgba(0,0,0,0.3)',
-        borderRadius: 20,
+        paddingVertical: 10,
         paddingHorizontal: 20,
+        backgroundColor: colors.surfaceBase,
+        borderRadius: 24,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
+        borderColor: colors.border,
     },
-    subtleStopText: {
-        fontFamily: 'Brand_Body',
-        color: 'rgba(255,255,255,0.5)',
+    quitButtonText: {
+        fontFamily: 'Brand_Body_Bold',
+        color: colors.text,
         fontSize: 14,
     },
 });

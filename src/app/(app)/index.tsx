@@ -12,20 +12,19 @@ import {
   Text,
   View,
   Platform,
-  LayoutAnimation,
   Alert,
   KeyboardAvoidingView,
-  Dimensions
+  Modal,
+  SafeAreaView
 } from "react-native";
-import BrandLogo from "../../components/BrandLogo";
-import { Colors } from "../../constants/colors";
+import { useTheme } from '../../providers/ThemeProvider';
 import i18n from "../../lib/i18n";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../providers/AuthProvider";
 import { Database } from "../../types/database.types";
-import { ScreenWrapper } from "../../components/ScreenWrapper"; // Assuming you have this wrapper from previous steps
+import { ScreenWrapper } from "../../components/ScreenWrapper"; 
+import { DailyQuizModal } from "../../components/DailyQuizModal";
 
-// Update Type
 type Verse = Database["public"]["Tables"]["verses"]["Row"] & {
   explanation?: string;
   prayer_guide?: string;
@@ -33,7 +32,6 @@ type Verse = Database["public"]["Tables"]["verses"]["Row"] & {
 
 const STORAGE_KEY_VERSE = 'revival_daily_verse_data_v3';
 const STORAGE_KEY_DATE = 'revival_daily_verse_date_v3';
-const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -41,10 +39,12 @@ export default function HomeScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // State for AI Expansion
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [quizVisible, setQuizVisible] = useState(false);
 
+  const { colors, isDark } = useTheme();
+  const styles = createStyles(colors, isDark);
   const router = useRouter();
 
   const getTodayDateString = () => {
@@ -52,7 +52,6 @@ export default function HomeScreen() {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
-  // --- 1. LOAD DAILY VERSE ---
   useEffect(() => {
     if (!user) return;
 
@@ -62,7 +61,6 @@ export default function HomeScreen() {
       const today = getTodayDateString();
 
       try {
-        // A. Check Local Cache
         const storedDate = await AsyncStorage.getItem(STORAGE_KEY_DATE);
         const storedVerseString = await AsyncStorage.getItem(STORAGE_KEY_VERSE);
 
@@ -72,7 +70,6 @@ export default function HomeScreen() {
           return; 
         }
 
-        // B. Check History (DB)
         const { data: historyData } = await supabase
           .from("verse_history")
           .select("*, verses(*)")
@@ -86,7 +83,6 @@ export default function HomeScreen() {
            return;
         }
 
-        // C. Get Random Verse
         const { data: randomVerse, error: rpcError } = await supabase.rpc("get_random_verse");
 
         if (rpcError || !randomVerse || randomVerse.length === 0) {
@@ -95,7 +91,6 @@ export default function HomeScreen() {
 
         const newVerse = randomVerse[0];
 
-        // D. Save History
         await supabase.from("verse_history").insert({
           user_id: user.id,
           verse_id: newVerse.id,
@@ -105,7 +100,6 @@ export default function HomeScreen() {
         await saveToCache(today, newVerse);
 
       } catch (err: any) {
-        console.error("Error loading verse:", err);
         setError(i18n.t("errors.fetchVerse"));
       } finally {
         setIsLoading(false);
@@ -133,25 +127,9 @@ export default function HomeScreen() {
     } catch (error: any) { }
   };
 
-  // --- 2. HANDLE AI EXPANSION ---
-  const toggleExpanded = async () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    
-    // CASE A: Closing
-    if (isExpanded) {
-        setIsExpanded(false);
-        return;
-    }
-
-    // CASE B: Opening...
-    // 1. If content ALREADY exists, just open
-    if (verse?.explanation && verse?.prayer_guide) {
-        setIsExpanded(true);
-        return;
-    }
-
-    // 2. If content MISSING, call AI
-    setIsExpanded(true); 
+  const openDeepenModal = async () => {
+    setModalVisible(true);
+    if (verse?.explanation && verse?.prayer_guide) return;
     setIsGeneratingAI(true);
 
     try {
@@ -165,7 +143,6 @@ export default function HomeScreen() {
 
         if (error) throw error;
 
-        // Save result locally so UI updates instantly
         if (data && verse) {
             const updatedVerse = { 
                 ...verse, 
@@ -177,9 +154,8 @@ export default function HomeScreen() {
         }
 
     } catch (err) {
-        console.error("AI Generation Error:", err);
         Alert.alert("Erreur", "Le service est momentanément indisponible.");
-        setIsExpanded(false); 
+        setModalVisible(false);
     } finally {
         setIsGeneratingAI(false);
     }
@@ -187,12 +163,12 @@ export default function HomeScreen() {
 
   const renderContent = () => {
     if (isLoading) {
-      return <ActivityIndicator size="large" color={Colors.accent} style={{marginTop: 50}} />;
+      return <ActivityIndicator size="large" color={colors.accent} style={{marginTop: 50}} />;
     }
     if (error) {
       return (
         <View style={styles.errorContainer}>
-            <Feather name="alert-circle" size={24} color={Colors.error} />
+            <Feather name="alert-circle" size={24} color={colors.error} />
             <Text style={styles.errorText}>{error}</Text>
         </View>
       );
@@ -200,27 +176,14 @@ export default function HomeScreen() {
     if (verse) {
       return (
         <>
-          {/* --- HERO CARD (Daily Atom Style) --- */}
           <MotiView
             style={styles.card}
-            from={{ opacity: 0, scale: 0.95, translateY: 10 }}
+            from={{ opacity: 0, scale: 0.98, translateY: 10 }}
             animate={{ opacity: 1, scale: 1, translateY: 0 }}
             transition={{ type: "timing", duration: 600 }}
           >
-            {/* Decoration */}
-            <View style={styles.cardDecoration} />
-
-            <View style={styles.cardHeaderRow}>
-                <View style={styles.tagContainer}>
-                    <Ionicons name="sparkles-sharp" size={12} color={Colors.primary} />
-                    <Text style={styles.tagText}>Verset du Jour</Text>
-                </View>
-                <Pressable
-                    onPress={handleShare}
-                    style={({ pressed }) => [styles.shareButton, pressed && { opacity: 0.7 }]}
-                >
-                    <Feather name="share-2" size={18} color={Colors.textSecondary} />
-                </Pressable>
+            <View style={styles.tagContainer}>
+                <Text style={styles.tagText}>Verset du Jour</Text>
             </View>
 
             <Text style={styles.verseText}>"{verse.text}"</Text>
@@ -229,106 +192,89 @@ export default function HomeScreen() {
                 {verse.book} {verse.chapter}:{verse.verse_number}
             </Text>
 
-            {/* Separator */}
-            <View style={styles.separator} />
-
-            {/* --- DEEP CONTENT TOGGLE --- */}
-            <View>
-                {!isExpanded && (
-                    <Pressable onPress={toggleExpanded} style={styles.expandButton}>
-                        <Text style={styles.expandButtonText}>Approfondir & Prier</Text>
-                        <View style={styles.expandIconContainer}>
-                            <Feather name="chevron-down" size={16} color={Colors.primary} />
-                        </View>
-                    </Pressable>
-                )}
-
-                {isExpanded && (
-                    <View style={styles.deepContent}>
-                        {isGeneratingAI ? (
-                             <View style={styles.loadingContainer}>
-                                <ActivityIndicator color={Colors.accent} />
-                                <Text style={styles.loadingText}>Réflexion en cours...</Text>
-                            </View>
-                        ) : (
-                            <>
-                                <View style={styles.deepSection}>
-                                    <View style={styles.deepHeader}>
-                                        <Feather name="book-open" size={16} color={Colors.accent} />
-                                        <Text style={styles.deepTitle}>Comprendre</Text>
-                                    </View>
-                                    <Text style={styles.deepText}>{verse.explanation}</Text>
-                                </View>
-
-                                <View style={styles.deepSection}>
-                                    <View style={styles.deepHeader}>
-                                        <Feather name="heart" size={16} color={Colors.accent} />
-                                        <Text style={styles.deepTitle}>Prier</Text>
-                                    </View>
-                                    <Text style={styles.deepTextItalic}>{verse.prayer_guide}</Text>
-                                </View>
-
-                                <Pressable onPress={toggleExpanded} style={styles.collapseButton}>
-                                   <Text style={styles.collapseText}>Fermer</Text>
-                                   <Feather name="chevron-up" size={16} color={Colors.textSecondary} />
-                                </Pressable>
-                            </>
-                        )}
-                    </View>
-                )}
-            </View>
+            <Pressable onPress={openDeepenModal} style={styles.expandButton}>
+                <Text style={styles.expandButtonText}>Approfondir & Prier</Text>
+                <View style={styles.expandIconContainer}>
+                    <Feather name="chevron-down" size={14} color={colors.ctaText} />
+                </View>
+            </Pressable>
           </MotiView>
 
-          {/* --- MEDITATION ACTION (Habit Row Style) --- */}
+          <MotiView
+            from={{ opacity: 0, translateY: 20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: "timing", duration: 600, delay: 100 }}
+            style={{ width: '100%' }}
+          >
+              <Link href={{ pathname: "/meditate", params: { verse: JSON.stringify(verse) } }} asChild>
+                <Pressable style={styles.actionRow}>
+                    <View style={styles.actionContent}>
+                        <Text style={styles.actionTitle}>Méditer ce verset</Text>
+                        <Text style={styles.actionSubtitle}>Guidé • 5 min • Calme</Text>
+                    </View>
+                    <View style={styles.playIconCircle}>
+                         <Feather name="play" size={14} color={colors.ctaText} style={{marginLeft: 2}}/>
+                    </View>
+                </Pressable>
+            </Link>
+          </MotiView>
+
+          {/* --- QUIZ ACTION --- */}
+          <MotiView
+            from={{ opacity: 0, translateY: 20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: "timing", duration: 600, delay: 250 }}
+            style={{ width: '100%' }}
+          >
+            <Pressable style={styles.actionRow} onPress={() => setQuizVisible(true)}>
+                <View style={styles.actionContent}>
+                    <Text style={styles.actionTitle}>Défi Quotidien</Text>
+                    <Text style={styles.actionSubtitle}>Testez vos connaissances d'hier</Text>
+                </View>
+                <View style={[styles.arrowIconCircle, { backgroundColor: colors.accent }]}>
+                      <Feather name="target" size={16} color={colors.primary} />
+                </View>
+            </Pressable>
+          </MotiView>
+
           <MotiView
             from={{ opacity: 0, translateY: 20 }}
             animate={{ opacity: 1, translateY: 0 }}
             transition={{ type: "timing", duration: 600, delay: 200 }}
             style={{ width: '100%' }}
-          >
-              <Link 
-                href={{
-                    pathname: "/meditate",
-                    params: { verse: JSON.stringify(verse) }
-                }} 
-                asChild
             >
-                <Pressable style={styles.meditateRow}>
-                    <View style={styles.meditateIconPlaceholder}>
-                        <Feather name="headphones" size={24} color={Colors.text} />
+            <Link href="/visitations" asChild>
+                <Pressable style={styles.actionRow}>
+                    <View style={styles.actionContent}>
+                        <Text style={styles.actionTitle}>Visitations</Text>
+                        <Text style={styles.actionSubtitle}>Planifiez vos moments</Text>
                     </View>
-                    <View style={styles.meditateContent}>
-                        <Text style={styles.meditateTitle}>Méditer ce verset</Text>
-                        <Text style={styles.meditateSubtitle}>Guidé • 5 min • Calme</Text>
-                    </View>
-                    <View style={styles.playIconCircle}>
-                         <Ionicons name="play" size={18} color={Colors.primary} style={{marginLeft: 2}}/>
+                    <View style={styles.arrowIconCircle}>
+                          <Feather name="arrow-right" size={14} color={colors.ctaText} />
                     </View>
                 </Pressable>
             </Link>
           </MotiView>
+
+          {/* --- CARNET ACTION --- */}
           <MotiView
             from={{ opacity: 0, translateY: 20 }}
             animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: "timing", duration: 600, delay: 300 }}
+            transition={{ type: "timing", duration: 600, delay: 400 }}
             style={{ width: '100%' }}
-            >
-            <Link href="/visitations" asChild>
-                <Pressable style={styles.visitationRow}>
-                    <View style={styles.meditateIconPlaceholder}>
-                        <Feather name="sun" size={24} color={Colors.text} />
+          >
+            <Link href="/journal" asChild>
+                <Pressable style={styles.actionRow}>
+                    <View style={styles.actionContent}>
+                        <Text style={styles.actionTitle}>Carnet Intime</Text>
+                        <Text style={styles.actionSubtitle}>Écrivez ce que vous avez sur le cœur</Text>
                     </View>
-                    <View style={styles.meditateContent}>
-                        <Text style={styles.meditateTitle}>Visitations</Text>
-                        <Text style={styles.meditateSubtitle}>Planifiez vos moments de prière</Text>
-                    </View>
-                    <View style={styles.playIconCircle}>
-                          <Ionicons name="arrow-forward" size={18} color={Colors.primary} />
+                    <View style={styles.arrowIconCircle}>
+                          <Feather name="feather" size={14} color={colors.ctaText} />
                     </View>
                 </Pressable>
             </Link>
-            </MotiView>
-
+          </MotiView>
         </>
       );
     }
@@ -336,607 +282,142 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScreenWrapper>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }} // Plus besoin de remettre la couleur de fond ou les insets ici !
-      >
-      <View style={styles.container}>
-          <ScrollView 
-              contentContainerStyle={styles.contentWrapper}
-              showsVerticalScrollIndicator={false}
-          >
+    <ScreenWrapper style={{ backgroundColor: colors.primary }}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.contentWrapper} showsVerticalScrollIndicator={false}>
+          
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+                <Text style={styles.greetingText} numberOfLines={1}>{i18n.t("home.greeting")}</Text>
+                <Text style={styles.dateText}>{new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
+            </View>
             
-            <View style={styles.header}>
-              <View>
-                  <Text style={styles.greetingText}>{i18n.t("home.greeting")}</Text>
-                  <Text style={styles.dateText}>{new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
-              </View>
-              
-                            <View style={styles.headerRight}>
-              
-                              {/* History Icon */}
-              
-                              <Link href="/history" asChild>
-              
-                                  <Pressable style={styles.iconButton}>
-              
-                                      <Feather name="clock" size={20} color={Colors.textSecondary} />
-              
-                                  </Pressable>
-              
-                              </Link>
-              
-                              
-              
-                              {/* Profile Icon */}
-              
-                              <Pressable style={styles.iconButton} onPress={() => router.push('/profile')}>
-              
-                                  <Feather name="user" size={20} color={Colors.textSecondary} />
-              
-                              </Pressable>
-              
+            <View style={styles.headerRight}>
+              <Link href="/history" asChild>
+                  <Pressable style={styles.iconButton}>
+                      <Feather name="clock" size={18} color={colors.textSecondary} />
+                  </Pressable>
+              </Link>
+              <Pressable style={styles.iconButton} onPress={() => router.push('/profile')}>
+                  <Feather name="user" size={18} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          </View>
+
+          {renderContent()}
+
+        </ScrollView>
+
+        <Modal
+            animationType="slide"
+            transparent={true}
+            visible={modalVisible}
+            onRequestClose={() => setModalVisible(false)}
+        >
+            <SafeAreaView style={styles.modalOverlay}>
+                <View style={styles.modalCard}>
+                    <View style={styles.modalHeader}>
+                        <View style={styles.modalHeaderLeft}>
+                            <View style={styles.modalIconBox}>
+                                <Feather name="sun" size={14} color={colors.text} />
                             </View>
-              
-                          </View>
-              
-              
-              
-                          {renderContent()}
-              
-              
-              
-                        </ScrollView>
-              
+                            <Text style={styles.modalSmallTitle}>Leçon Quotidienne</Text>
+                        </View>
+                        <Pressable onPress={() => setModalVisible(false)} style={styles.closeModalButton}>
+                            <Feather name="x" size={20} color={colors.text} />
+                        </Pressable>
                     </View>
-              
-                    </KeyboardAvoidingView>
-              
-                  </ScreenWrapper>
-              
-                );
-              
-              }
-              
-              
-              
-              const styles = StyleSheet.create({
-              
-                container: { 
-              
-                    flex: 1, 
-              
-                    backgroundColor: Colors.primary 
-              
-                },
-              
-                contentWrapper: { 
-              
-                    flexGrow: 1, 
-              
-                    paddingHorizontal: 24, 
-              
-                    paddingTop: 20, 
-              
-                    paddingBottom: 40 
-              
-                },
-              
-                
-              
-                // HEADER
-              
-                header: {
-              
-                  width: '100%',
-              
-                  flexDirection: 'row',
-              
-                  justifyContent: 'space-between', 
-              
-                  alignItems: 'center',
-              
-                  marginBottom: 30,
-              
-                  marginTop: 10,
-              
-                },
-              
-                headerRight: {
-              
-                    flexDirection: 'row',
-              
-                    gap: 8, 
-              
-                },
-              
-                greetingText: {
-              
-                  fontFamily: 'Brand_Heading', 
-              
-                  fontSize: 28,
-              
-                  color: Colors.text, 
-              
-                },
-              
-                dateText: {
-              
-                    fontFamily: 'Brand_Body',
-              
-                    fontSize: 14,
-              
-                    color: Colors.textSecondary,
-              
-                    textTransform: 'capitalize',
-              
-                    marginTop: 2,
-              
-                },
-              
-                iconButton: {
-              
-                  width: 44,
-              
-                  height: 44,
-              
-                  borderRadius: 22, // Circle
-              
-                  backgroundColor: Colors.surface,
-              
-                  justifyContent: 'center',
-              
-                  alignItems: 'center',
-              
-                  borderWidth: 1,
-              
-                  borderColor: Colors.border,
-              
-                },
-              
-              
-              
-                // HERO CARD (Atoms Style)
-              
-                card: {
-              
-                  width: '100%',
-              
-                  backgroundColor: Colors.surface, // Deep slate
-              
-                  borderRadius: 32, // Large Squircle
-              
-                  padding: 24,
-              
-                  marginBottom: 20,
-              
-                  position: 'relative',
-              
-                  overflow: 'hidden',
-              
-                  borderWidth: 1,
-              
-                  borderColor: Colors.border,
-              
-                },
-              
-                cardDecoration: {
-              
-                    position: 'absolute',
-              
-                    top: -50,
-              
-                    right: -50,
-              
-                    width: 150,
-              
-                    height: 150,
-              
-                    borderRadius: 75,
-              
-                    backgroundColor: Colors.surfaceHighlight, // Subtle glow
-              
-                    opacity: 0.5,
-              
-                },
-              
-                cardHeaderRow: {
-              
-                    flexDirection: 'row',
-              
-                    justifyContent: 'space-between',
-              
-                    alignItems: 'center',
-              
-                    marginBottom: 20,
-              
-                },
-              
-                tagContainer: {
-              
-                  backgroundColor: Colors.accent, // Sage Green
-              
-                  paddingHorizontal: 12,
-              
-                  paddingVertical: 6,
-              
-                  borderRadius: 20,
-              
-                  flexDirection: 'row',
-              
-                  alignItems: 'center',
-              
-                  gap: 6,
-              
-                },
-              
-                tagText: {
-              
-                  fontFamily: 'Brand_Body_Bold',
-              
-                  fontSize: 12,
-              
-                  color: Colors.primary, 
-              
-                  textTransform: 'uppercase',
-              
-                },
-              
-                shareButton: { 
-              
-                  padding: 8,
-              
-                  backgroundColor: Colors.surfaceHighlight,
-              
-                  borderRadius: 20,
-              
-                },
-              
-              
-              
-                verseText: {
-              
-                  fontFamily: 'Brand_Heading', 
-              
-                  fontSize: 26,
-              
-                  color: Colors.text,
-              
-                  textAlign: 'left',
-              
-                  marginBottom: 12,
-              
-                  lineHeight: 36,
-              
-                },
-              
-                referenceText: {
-              
-                  fontFamily: 'Brand_Body',
-              
-                  fontSize: 15,
-              
-                  color: Colors.textSecondary,
-              
-                  marginBottom: 20,
-              
-                },
-              
-                
-              
-                separator: {
-              
-                  height: 1,
-              
-                  backgroundColor: Colors.border,
-              
-                  marginBottom: 20,
-              
-                  width: '100%',
-              
-                },
-              
-              
-              
-                // ACTION BUTTONS (Pill Style)
-              
-                expandButton: {
-              
-                  flexDirection: 'row',
-              
-                  justifyContent: 'space-between',
-              
-                  alignItems: 'center',
-              
-                  backgroundColor: Colors.surfaceHighlight,
-              
-                  paddingVertical: 14,
-              
-                  paddingHorizontal: 20,
-              
-                  borderRadius: 24, // Pill
-              
-                },
-              
-                expandButtonText: {
-              
-                  fontFamily: 'Brand_Body_Bold',
-              
-                  color: Colors.text,
-              
-                  fontSize: 15,
-              
-                },
-              
-                expandIconContainer: {
-              
-                    width: 24,
-              
-                    height: 24,
-              
-                    borderRadius: 12,
-              
-                    backgroundColor: Colors.accent,
-              
-                    justifyContent: 'center',
-              
-                    alignItems: 'center',
-              
-                },
-              
-              
-              
-                // EXPANDED CONTENT
-              
-                deepContent: {
-              
-                  marginTop: 5,
-              
-                },
-              
-                loadingContainer: {
-              
-                    padding: 20, 
-              
-                    alignItems: 'center',
-              
-                    gap: 10,
-              
-                },
-              
-                loadingText: {
-              
-                    color: Colors.textTertiary, 
-              
-                    fontSize: 13, 
-              
-                    fontFamily: 'Brand_Body'
-              
-                },
-              
-                deepSection: {
-              
-                  marginBottom: 24,
-              
-                  backgroundColor: 'rgba(0,0,0,0.2)', // Slightly darker for text blocks
-              
-                  padding: 16,
-              
-                  borderRadius: 20,
-              
-                },
-              
-                deepHeader: {
-              
-                  flexDirection: 'row',
-              
-                  alignItems: 'center',
-              
-                  marginBottom: 10,
-              
-                  gap: 8,
-              
-                },
-              
-                deepTitle: {
-              
-                  fontFamily: 'Brand_Body_Bold',
-              
-                  color: Colors.accent,
-              
-                  fontSize: 14,
-              
-                  textTransform: 'uppercase',
-              
-                  letterSpacing: 0.5,
-              
-                },
-              
-                deepText: {
-              
-                  fontFamily: 'Brand_Body',
-              
-                  color: Colors.text,
-              
-                  fontSize: 16,
-              
-                  lineHeight: 26,
-              
-                  textAlign: 'left',
-              
-                },
-              
-                deepTextItalic: {
-              
-                  fontFamily: 'Brand_Body',
-              
-                  fontStyle: 'italic',
-              
-                  color: 'rgba(255,255,255,0.85)',
-              
-                  fontSize: 16,
-              
-                  lineHeight: 26,
-              
-                  textAlign: 'left',
-              
-                },
-              
-                collapseButton: {
-              
-                  flexDirection: 'row',
-              
-                  justifyContent: 'center',
-              
-                  alignItems: 'center',
-              
-                  paddingVertical: 10,
-              
-                  gap: 6,
-              
-                },
-              
-                collapseText: {
-              
-                    color: Colors.textSecondary,
-              
-                    fontFamily: 'Brand_Body',
-              
-                    fontSize: 14,
-              
-                },
-              
-              
-              
-                // MEDITATE ROW (Habit Style)
-              
-                meditateRow: {
-              
-                  flexDirection: 'row',
-              
-                  alignItems: 'center',
-              
-                  backgroundColor: Colors.surface,
-              
-                  padding: 16,
-              
-                  borderRadius: 28, // Matches card curvature
-              
-                  borderWidth: 1,
-              
-                  borderColor: Colors.border,
-              
-                },
-              
-                visitationRow: {
-              
-                  flexDirection: 'row',
-              
-                  alignItems: 'center',
-              
-                  backgroundColor: Colors.surface,
-              
-                  padding: 16,
-              
-                  borderRadius: 28,
-              
-                  borderWidth: 1,
-              
-                  borderColor: Colors.border,
-              
-                  marginTop: 20,
-              
-                },
-              
-                meditateIconPlaceholder: {
-              
-                  width: 50,
-              
-                  height: 50,
-              
-                  borderRadius: 18, // Squircle
-              
-                  backgroundColor: Colors.surfaceHighlight,
-              
-                  justifyContent: 'center',
-              
-                  alignItems: 'center',
-              
-                  marginRight: 16,
-              
-                },
-              
-                meditateContent: {
-              
-                  flex: 1,
-              
-                },
-              
-                meditateTitle: {
-              
-                  fontFamily: 'Brand_Heading',
-              
-                  fontSize: 18,
-              
-                  color: Colors.text,
-              
-                  marginBottom: 4,
-              
-                },
-              
-                meditateSubtitle: {
-              
-                  fontFamily: 'Brand_Body',
-              
-                  fontSize: 13,
-              
-                  color: Colors.textSecondary,
-              
-                },
-              
-                playIconCircle: {
-              
-                  width: 36,
-              
-                  height: 36,
-              
-                  borderRadius: 18,
-              
-                  backgroundColor: Colors.accent,
-              
-                  justifyContent: 'center',
-              
-                  alignItems: 'center',
-              
-                },
-              
-              
-              
-                // ERROR
-              
-                errorContainer: {
-              
-                    alignItems: 'center',
-              
-                    gap: 10,
-              
-                    marginTop: 50,
-              
-                },
-              
-                errorText: { 
-              
-                    color: Colors.error, 
-              
-                    fontSize: 16, 
-              
-                    textAlign: 'center',
-              
-                    fontFamily: 'Brand_Body'
-              
-                },
-              
-              });
-              
-              
+
+                    <ScrollView contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
+                        <Text style={styles.modalMainTitle}>Comprendre et intégrer {verse?.book} {verse?.chapter}</Text>
+                        <Text style={styles.modalMetaInfo}>Revival Culture • 3 minutes de lecture</Text>
+                        
+                        <View style={styles.modalSeparator} />
+
+                        {isGeneratingAI ? (
+                            <View style={styles.loadingContainer}>
+                                <ActivityIndicator color={colors.accent} size="large" />
+                                <Text style={styles.loadingText}>Connexion au sanctuaire...</Text>
+                            </View>
+                        ) : (
+                            <>
+                                <Text style={styles.modalText}>{verse?.explanation}</Text>
+                                <Text style={[styles.modalText, {fontFamily: 'Brand_Italic', marginTop: 20, borderLeftWidth: 2, borderLeftColor: colors.accentWarm, paddingLeft: 16}]}>
+                                    {verse?.prayer_guide}
+                                </Text>
+                            </>
+                        )}
+                    </ScrollView>
+
+                    <View style={styles.modalBottomActions}>
+                        <Pressable onPress={handleShare} style={styles.modalShareButton}>
+                            <Text style={styles.modalShareText}>Partager</Text>
+                            <Feather name="share" size={16} color={colors.ctaText} />
+                        </Pressable>
+                    </View>
+                </View>
+            </SafeAreaView>
+        </Modal>
+
+        <DailyQuizModal visible={quizVisible} onClose={() => setQuizVisible(false)} />
+
+      </KeyboardAvoidingView>
+    </ScreenWrapper>
+  );
+}
+
+const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+  contentWrapper: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 40 },
+  
+  header: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, marginTop: 10 },
+  headerLeft: { flex: 1, paddingRight: 16 }, // Empêche le texte de pousser les icônes
+  headerRight: { flexDirection: 'row', gap: 8 },
+  greetingText: { fontFamily: 'Brand_Heading', fontSize: 24, color: colors.text }, // Réduit de 32 à 24
+  dateText: { fontFamily: 'Brand_Body', fontSize: 13, color: colors.textSecondary, textTransform: 'capitalize', marginTop: 4 },
+  iconButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceBase, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.border }, // Réduit de 44 à 40
+
+  // Utilisation de surfaceBase au lieu de pure white (surface)
+  card: { width: '100%', backgroundColor: colors.surfaceBase, borderRadius: 24, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
+  tagContainer: { backgroundColor: colors.accent, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginBottom: 20 },
+  tagText: { fontFamily: 'Brand_Body_Bold', fontSize: 10, color: colors.ctaText, textTransform: 'uppercase', letterSpacing: 0.5 },
+  
+  verseText: { fontFamily: 'Brand_Heading', fontSize: 22, color: colors.text, textAlign: 'center', marginBottom: 12, lineHeight: 32 }, // Réduit de 28 à 22
+  referenceText: { fontFamily: 'Brand_Body', fontSize: 14, color: colors.textSecondary, marginBottom: 24 },
+  
+  expandButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: colors.primary, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 20, gap: 10, borderWidth: 1, borderColor: colors.border },
+  expandButtonText: { fontFamily: 'Brand_Body_Bold', color: colors.text, fontSize: 14 },
+  expandIconContainer: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.accent, justifyContent: 'center', alignItems: 'center' },
+
+  // Utilisation de surfaceBase au lieu de pure white
+  actionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surfaceBase, padding: 20, borderRadius: 20, borderWidth: 1, borderColor: colors.border, marginTop: 10 },
+  actionContent: { flex: 1 },
+  actionTitle: { fontFamily: 'Brand_Heading', fontSize: 18, color: colors.text, marginBottom: 4 }, // Réduit de 20 à 18
+  actionSubtitle: { fontFamily: 'Brand_Body', fontSize: 13, color: colors.textSecondary },
+  playIconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accentWarm, justifyContent: 'center', alignItems: 'center' },
+  arrowIconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accentWarm, justifyContent: 'center', alignItems: 'center' },
+
+  errorContainer: { alignItems: 'center', gap: 10, marginTop: 50 },
+  errorText: { color: colors.error, fontSize: 15, textAlign: 'center', fontFamily: 'Brand_Body' },
+
+  modalOverlay: { flex: 1, backgroundColor: colors.backdrop, justifyContent: 'flex-end' },
+  modalCard: { backgroundColor: colors.primary, borderTopLeftRadius: 28, borderTopRightRadius: 28, height: '85%', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  modalIconBox: { backgroundColor: colors.surfaceBase, padding: 8, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+  modalSmallTitle: { fontFamily: 'Brand_Body_Bold', color: colors.text, fontSize: 14 },
+  closeModalButton: { backgroundColor: colors.surfaceBase, borderRadius: 20, padding: 6 },
+  
+  modalScrollContent: { paddingBottom: 40, paddingTop: 10 },
+  modalMainTitle: { fontFamily: 'Brand_Heading', fontSize: 26, color: colors.text, lineHeight: 36, marginBottom: 12 }, // Réduit de 32 à 26
+  modalMetaInfo: { fontFamily: 'Brand_Body', color: colors.textSecondary, fontSize: 13, marginBottom: 24 },
+  modalSeparator: { height: 1, backgroundColor: colors.border, width: '100%', marginBottom: 24 },
+  
+  loadingContainer: { alignItems: 'center', marginTop: 40, gap: 16 },
+  loadingText: { fontFamily: 'Brand_Body', color: colors.textTertiary, fontSize: 14 },
+  
+  modalText: { fontFamily: 'Brand_Body', fontSize: 16, color: colors.text, lineHeight: 28 }, // Réduit de 18 à 16
+  
+  modalBottomActions: { paddingTop: 20, alignItems: 'center' },
+  modalShareButton: { flexDirection: 'row', backgroundColor: colors.ctaFill, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 24, alignItems: 'center', gap: 10 },
+  modalShareText: { fontFamily: 'Brand_Body_Bold', color: colors.ctaText, fontSize: 15 },
+});

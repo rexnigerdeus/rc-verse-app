@@ -3,8 +3,9 @@
 import { Feather } from "@expo/vector-icons";
 import { router, Tabs } from "expo-router";
 import { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
-import { Colors } from "../../constants/colors";
+import { ActivityIndicator, View, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context"; 
+import { useTheme } from "../../providers/ThemeProvider"; 
 import { useNotifications } from "../../hooks/useNotifications";
 import i18n from "../../lib/i18n";
 import { useAuth } from "../../providers/AuthProvider";
@@ -19,8 +20,11 @@ function TabBarIcon(props: {
 
 export default function AppLayout() {
   useNotifications();
-
   const { session, loading } = useAuth();
+  
+  // 1. Récupération des couleurs dynamiques et de la zone de sécurité
+  const { colors, isDark } = useTheme(); 
+  const insets = useSafeAreaInsets(); 
 
   useEffect(() => {
     if (!loading && !session) {
@@ -34,30 +38,35 @@ export default function AppLayout() {
         style={{
           flex: 1,
           justifyContent: "center",
-          backgroundColor: Colors.primary,
+          backgroundColor: colors.primary,
         }}
       >
-        <ActivityIndicator size="large" color={Colors.text} />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
-  // CHANGED: We now return a Tabs navigator
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors.accent, // Abidjan Clay
-        tabBarInactiveTintColor: 'rgba(244, 241, 234, 0.7)', // Cream with opacity
+        tabBarActiveTintColor: colors.accent,
+        // On ajuste la couleur inactive selon le mode clair ou sombre
+        tabBarInactiveTintColor: isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)', 
         tabBarStyle: { 
-          backgroundColor: Colors.primary, 
-          borderTopColor: 'rgba(244, 241, 234, 0.1)',
-          height: 60, // Slightly taller for elegance
+          backgroundColor: colors.primary, 
+          borderTopColor: colors.border,
+          borderTopWidth: 1,
+          // CORRECTION DE L'ESPACEMENT ICI :
+          height: Platform.OS === 'ios' ? 60 + insets.bottom : 70, 
+          paddingBottom: Platform.OS === 'ios' ? insets.bottom : 10,
+          paddingTop: 10,
         },
         headerShown: false,
         tabBarLabelStyle: {
           fontFamily: 'Brand_Body',
           fontSize: 10,
-          paddingTop: 4,       }
+          paddingTop: 4,       
+        }
       }}
     >
       <Tabs.Screen
@@ -103,16 +112,21 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
+        name="journal"
+        options={{
+          title: "Carnet",
+          tabBarIcon: ({ color }) => <TabBarIcon name="feather" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="contact"
         options={{
-          title: i18n.t("tabs.contact"),
-          tabBarIcon: ({ color }) => <TabBarIcon name="cast" color={color} />,
+          href: null, 
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
-          // This is the magic property that hides the tab button
           href: null, 
         }}
       />

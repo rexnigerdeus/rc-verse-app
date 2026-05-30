@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Alert, Image } from 'react-native';
 import { supabase } from '../../lib/supabase';
-import { Colors } from '../../constants/colors';
-import { useRouter, Link } from 'expo-router';
+import { useTheme } from '../../providers/ThemeProvider';
+import { useRouter } from 'expo-router';
 
 export default function SignUpScreen() {
     const [name, setName] = useState('');
@@ -11,7 +11,9 @@ export default function SignUpScreen() {
     const [loading, setLoading] = useState(false);
     const router = useRouter();
 
-    // Helper to ensure alerts work on Web and Mobile
+    const { colors, isDark } = useTheme();
+    const styles = createStyles(colors, isDark);
+
     const showAlert = (title: string, message: string) => {
         if (Platform.OS === 'web') {
             window.alert(`${title}: ${message}`);
@@ -21,8 +23,8 @@ export default function SignUpScreen() {
     };
 
     const handleSignUp = async () => {
-        console.log("Button pressed!"); // DEBUG LOG 1
-        console.log("Form Data:", { name, phone, password }); // DEBUG LOG 2
+        console.log("Button pressed!"); 
+        console.log("Form Data:", { name, phone, password }); 
 
         if (!name || !phone || !password) {
             console.log("Validation failed: Missing fields");
@@ -30,12 +32,9 @@ export default function SignUpScreen() {
             return;
         }
 
-        // Clean phone number: remove spaces, dashes
         const cleanPhone = phone.replace(/\s/g, '').replace(/-/g, '');
-        
-        // Create a "fake" email to satisfy Supabase Auth
         const pseudoEmail = `${cleanPhone}@revival.culture`;
-        console.log("Attempting sign up with:", pseudoEmail); // DEBUG LOG 3
+        console.log("Attempting sign up with:", pseudoEmail); 
 
         setLoading(true);
         
@@ -57,7 +56,6 @@ export default function SignUpScreen() {
             } else {
                 console.log("Sign Up Success:", data);
                 showAlert('Succès', 'Compte créé avec succès !');
-                // The AuthProvider should handle the redirect now
             }
         } catch (err: any) {
             console.error("Unexpected Error:", err);
@@ -68,85 +66,121 @@ export default function SignUpScreen() {
     };
 
     return (
-        <KeyboardAvoidingView 
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.container}
-        >
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                <View style={styles.logoContainer}>
-                    <Text style={styles.brandTitle}>REVIVAL CULTURE</Text>
-                    <Text style={styles.brandSubtitle}>ABIDJAN</Text>
-                </View>
+        <View style={styles.container}>
+            {/* Illustration Zen en arrière-plan */}
+            <Image 
+                source={{ uri: 'https://images.unsplash.com/photo-1508614999368-9260051292e5?q=80&w=1000&auto=format&fit=crop' }} 
+                style={styles.backgroundImage}
+                resizeMode="cover"
+            />
+            <View style={styles.backgroundOverlay} />
 
-                <View style={styles.formContainer}>
-                    <Text style={styles.header}>Créer un compte</Text>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                     
-                    <Text style={styles.label}>Nom complet</Text>
-                    <TextInput 
-                        style={styles.input} 
-                        placeholder="Jean Kouassi" 
-                        placeholderTextColor="rgba(244, 241, 234, 0.5)"
-                        value={name}
-                        onChangeText={setName}
-                    />
-
-                    <Text style={styles.label}>Numéro de téléphone (WhatsApp)</Text>
-                    <TextInput 
-                        style={styles.input} 
-                        placeholder="07 07 07 07 07" 
-                        placeholderTextColor="rgba(244, 241, 234, 0.5)"
-                        value={phone}
-                        onChangeText={setPhone}
-                        keyboardType="phone-pad"
-                    />
-
-                    <Text style={styles.label}>Mot de passe</Text>
-                    <TextInput 
-                        style={styles.input} 
-                        placeholder="••••••" 
-                        placeholderTextColor="rgba(244, 241, 234, 0.5)"
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry
-                    />
-
-                    <Pressable 
-                        onPress={handleSignUp} 
-                        style={({pressed}) => [styles.button, pressed && {opacity: 0.8}]}
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <ActivityIndicator color={Colors.text} />
-                        ) : (
-                            <Text style={styles.buttonText}>S'inscrire</Text>
-                        )}
-                    </Pressable>
-
-                    <View style={styles.footer}>
-                      <Text style={styles.footerText}>Déjà un compte ? </Text>
-                      <Pressable onPress={() => router.replace('/login')}>
-                          <Text style={styles.linkText}>Se connecter</Text>
-                      </Pressable>
+                    <View style={styles.logoContainer}>
+                        <Text style={styles.brandTitle}>REVIVAL CULTURE</Text>
+                        <Text style={styles.brandSubtitle}>ABIDJAN</Text>
                     </View>
-                </View>
-            </ScrollView>
-        </KeyboardAvoidingView>
+
+                    <View style={styles.formContainer}>
+                        <Text style={styles.header}>Créer un compte</Text>
+                        
+                        <Text style={styles.label}>Nom complet</Text>
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="Jean Kouassi" 
+                            placeholderTextColor={colors.textTertiary}
+                            value={name}
+                            onChangeText={setName}
+                        />
+
+                        <Text style={styles.label}>Numéro de téléphone (WhatsApp)</Text>
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="07 07 07 07 07" 
+                            placeholderTextColor={colors.textTertiary}
+                            value={phone}
+                            onChangeText={setPhone}
+                            keyboardType="phone-pad"
+                        />
+
+                        <Text style={styles.label}>Mot de passe</Text>
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="••••••" 
+                            placeholderTextColor={colors.textTertiary}
+                            value={password}
+                            onChangeText={setPassword}
+                            secureTextEntry
+                        />
+
+                        <Pressable 
+                            onPress={handleSignUp} 
+                            style={({pressed}) => [styles.button, pressed && {opacity: 0.8}]}
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <ActivityIndicator color={isDark ? colors.primary : '#FFFFFF'} />
+                            ) : (
+                                <Text style={styles.buttonText}>S'inscrire</Text>
+                            )}
+                        </Pressable>
+
+                        <View style={styles.footer}>
+                            <Text style={styles.footerText}>Déjà un compte ? </Text>
+                            <Pressable onPress={() => router.replace('/login')}>
+                                <Text style={styles.linkText}>Se connecter</Text>
+                            </Pressable>
+                        </View>
+                    </View>
+
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </View>
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.primary },
-    scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 20 },
+const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.primary },
+    
+    // Background Image Styles
+    backgroundImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', opacity: isDark ? 0.3 : 0.25 },
+    backgroundOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.primary, opacity: 0.45 },
+
+    scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 },
+    
     logoContainer: { alignItems: 'center', marginBottom: 40 },
-    brandTitle: { fontFamily: 'Brand_Heading', fontSize: 32, color: Colors.text, letterSpacing: 2 },
-    brandSubtitle: { fontFamily: 'Brand_Body', fontSize: 14, color: Colors.accent, letterSpacing: 4, marginTop: 5 },
-    formContainer: { backgroundColor: 'rgba(0,0,0,0.2)', padding: 25, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(244, 241, 234, 0.1)' },
-    header: { fontFamily: 'Brand_Heading', fontSize: 24, color: Colors.text, textAlign: 'center', marginBottom: 25 },
-    label: { fontFamily: 'Brand_Body_Bold', color: Colors.accent, marginBottom: 8, fontSize: 14 },
-    input: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 15, color: Colors.text, fontFamily: 'Brand_Body', marginBottom: 20, borderWidth: 1, borderColor: 'rgba(244, 241, 234, 0.1)' },
-    button: { backgroundColor: Colors.accent, padding: 18, borderRadius: 30, alignItems: 'center', marginTop: 10 },
-    buttonText: { fontFamily: 'Brand_Body_Bold', color: Colors.text, fontSize: 16 },
-    footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
-    footerText: { color: 'rgba(244, 241, 234, 0.6)', fontFamily: 'Brand_Body' },
-    linkText: { color: Colors.highlight, fontFamily: 'Brand_Body_Bold' },
+    brandTitle: { fontFamily: 'Brand_Heading', fontSize: 28, color: colors.text, letterSpacing: 2 },
+    brandSubtitle: { fontFamily: 'Brand_Body_Bold', fontSize: 12, color: colors.accent, letterSpacing: 4, marginTop: 6 },
+    
+    formContainer: { 
+        backgroundColor: colors.surfaceBase, 
+        padding: 32, 
+        borderRadius: 24, 
+        borderWidth: 1, 
+        borderColor: colors.border,
+        shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.05, shadowRadius: 20, elevation: 5
+    },
+    header: { fontFamily: 'Brand_Heading', fontSize: 22, color: colors.text, textAlign: 'center', marginBottom: 30 },
+    
+    label: { fontFamily: 'Brand_Body_Bold', color: colors.textSecondary, marginBottom: 8, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 },
+    input: { 
+        backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : colors.primary, 
+        borderRadius: 16, 
+        paddingHorizontal: 20, 
+        paddingVertical: 18, 
+        color: colors.text, 
+        fontFamily: 'Brand_Body', 
+        marginBottom: 24, 
+        borderWidth: 1, 
+        borderColor: colors.border 
+    },
+    
+    button: { backgroundColor: colors.accent, paddingVertical: 18, borderRadius: 24, alignItems: 'center', marginTop: 10 },
+    buttonText: { fontFamily: 'Brand_Body_Bold', color: isDark ? colors.primary : '#FFFFFF', fontSize: 15 },
+    
+    footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 30 },
+    footerText: { color: colors.textSecondary, fontFamily: 'Brand_Body', fontSize: 14 },
+    linkText: { color: colors.text, fontFamily: 'Brand_Body_Bold', fontSize: 14 },
 });

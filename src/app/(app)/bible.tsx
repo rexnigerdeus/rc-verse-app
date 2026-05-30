@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, Modal, SafeAreaView, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
-import { Colors } from '../../constants/colors';
+import { useTheme } from '../../providers/ThemeProvider';
 
 // --- CONSTANTS ---
 const BIBLE_VERSIONS = [
@@ -67,6 +67,11 @@ export default function BibleScreen() {
     const [isSelectorVisible, setSelectorVisible] = useState(false);
     const [selectorStep, setSelectorStep] = useState<'BOOK' | 'CHAPTER' | 'VERSION'>('BOOK'); // NOUVEAU: 'VERSION'
     const [tempBook, setTempBook] = useState<Book>(BIBLE_BOOKS[0]);
+
+    // 1. Récupération des couleurs dynamiques
+    const { colors } = useTheme();
+    // 2. Génération des styles
+    const styles = createStyles(colors);
 
     // --- FETCH DATA ---
     const fetchChapter = useCallback(async () => {
@@ -151,11 +156,11 @@ export default function BibleScreen() {
                     </Pressable>
                     <Pressable onPress={openVersionSelector} style={styles.headerSubtitleRow}>
                         <Text style={styles.headerSubtitle}>{selectedVersion.name}</Text>
-                        <Feather name="chevron-down" size={14} color={Colors.textSecondary} />
+                        <Feather name="chevron-down" size={14} color={colors.textSecondary} />
                     </Pressable>
                 </View>
                 <Pressable style={styles.searchButton} onPress={openBookSelector}>
-                    <Feather name="list" size={20} color={Colors.text} />
+                    <Feather name="list" size={20} color={colors.text} />
                 </Pressable>
             </View>
 
@@ -163,10 +168,10 @@ export default function BibleScreen() {
             {/* ... gardez votre View de chargement et votre FlatList de versets ici ... */}
             <View style={{ flex: 1 }}>
                 {isLoading ? (
-                    <View style={styles.centered}><ActivityIndicator size="large" color={Colors.accent} /></View>
+                    <View style={styles.centered}><ActivityIndicator size="large" color={colors.accent} /></View>
                 ) : error ? (
                     <View style={styles.centered}>
-                        <Feather name="wifi-off" size={32} color={Colors.textSecondary} style={{marginBottom: 10}}/>
+                        <Feather name="wifi-off" size={32} color={colors.textSecondary} style={{marginBottom: 10}}/>
                         <Text style={styles.errorText}>Impossible de charger le chapitre.</Text>
                         <Pressable style={styles.retryButton} onPress={fetchChapter}>
                             <Text style={styles.retryText}>Réessayer</Text>
@@ -192,11 +197,11 @@ export default function BibleScreen() {
             {/* BARRE DU BAS (Identique...) */}
             <View style={styles.bottomBar}>
                 <Pressable onPress={handlePrevChapter} disabled={selectedChapter <= 1} style={[styles.navButton, selectedChapter <= 1 && styles.disabled]}>
-                    <Feather name="chevron-left" size={24} color={Colors.text} />
+                    <Feather name="chevron-left" size={24} color={colors.text} />
                 </Pressable>
                 <Text style={styles.bottomBarText}>Chapitre {selectedChapter}</Text>
                 <Pressable onPress={handleNextChapter} disabled={selectedChapter >= selectedBook.chapters} style={[styles.navButton, selectedChapter >= selectedBook.chapters && styles.disabled]}>
-                    <Feather name="chevron-right" size={24} color={Colors.text} />
+                    <Feather name="chevron-right" size={24} color={colors.text} />
                 </Pressable>
             </View>
 
@@ -211,7 +216,7 @@ export default function BibleScreen() {
                                 style={{ padding: 10, opacity: selectorStep === 'CHAPTER' ? 1 : 0 }}
                                 disabled={selectorStep !== 'CHAPTER'}
                             >
-                                <Feather name="arrow-left" size={24} color={Colors.text} />
+                                <Feather name="arrow-left" size={24} color={colors.text} />
                             </Pressable>
                             
                             {/* Titre dynamique */}
@@ -220,7 +225,7 @@ export default function BibleScreen() {
                             </Text>
                             
                             <Pressable onPress={() => setSelectorVisible(false)} style={{ padding: 10 }}>
-                                <Feather name="x" size={24} color={Colors.text} />
+                                <Feather name="x" size={24} color={colors.text} />
                             </Pressable>
                         </View>
 
@@ -234,11 +239,11 @@ export default function BibleScreen() {
                                     <Pressable style={styles.listItem} onPress={() => selectVersion(item)}>
                                         <Text style={[
                                             styles.listItemText, 
-                                            selectedVersion.id === item.id && {color: Colors.accent, fontFamily: 'Brand_Body_Bold'}
+                                            selectedVersion.id === item.id && {color: colors.accent, fontFamily: 'Brand_Body_Bold'}
                                         ]}>
                                             {item.name}
                                         </Text>
-                                        {selectedVersion.id === item.id && <Feather name="check" size={18} color={Colors.accent} />}
+                                        {selectedVersion.id === item.id && <Feather name="check" size={18} color={colors.accent} />}
                                     </Pressable>
                                 )}
                             />
@@ -250,7 +255,7 @@ export default function BibleScreen() {
                                 renderItem={({ item }) => (
                                     <Pressable style={styles.listItem} onPress={() => selectBook(item)}>
                                         <Text style={styles.listItemText}>{item.name}</Text>
-                                        <Feather name="chevron-right" size={18} color={Colors.textSecondary} />
+                                        <Feather name="chevron-right" size={18} color={colors.textSecondary} />
                                     </Pressable>
                                 )}
                             />
@@ -276,7 +281,7 @@ export default function BibleScreen() {
 
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
     centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     
     header: {
@@ -289,14 +294,14 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(255,255,255,0.05)',
     },
     headerSelector: { flex: 1 },
-    headerTitle: { fontFamily: 'Brand_Heading', fontSize: 24, color: Colors.text },
+    headerTitle: { fontFamily: 'Brand_Heading', fontSize: 24, color: colors.text },
     headerSubtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-    headerSubtitle: { fontFamily: 'Brand_Body', fontSize: 14, color: Colors.textSecondary },
+    headerSubtitle: { fontFamily: 'Brand_Body', fontSize: 14, color: colors.textSecondary },
     searchButton: { padding: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20 },
     
     scrollContent: { paddingHorizontal: 24, paddingTop: 30, paddingBottom: 40 },
-    verseText: { fontFamily: 'Brand_Body', color: Colors.text, fontSize: 18, lineHeight: 32, marginBottom: 16, textAlign: 'left' },
-    verseNumber: { fontFamily: 'Brand_Body_Bold', color: Colors.accent, fontSize: 14 },
+    verseText: { fontFamily: 'Brand_Body', color: colors.text, fontSize: 18, lineHeight: 32, marginBottom: 16, textAlign: 'left' },
+    verseNumber: { fontFamily: 'Brand_Body_Bold', color: colors.accent, fontSize: 14 },
     
     bottomBar: {
         flexDirection: 'row',
@@ -304,27 +309,27 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 30,
         paddingVertical: Platform.OS === 'ios' ? 20 : 15,
-        backgroundColor: Colors.primary,
+        backgroundColor: colors.primary,
         borderTopWidth: 1,
         borderColor: 'rgba(255,255,255,0.05)',
     },
     navButton: { padding: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20 },
-    bottomBarText: { fontFamily: 'Brand_Body_Bold', color: Colors.text, fontSize: 16 },
+    bottomBarText: { fontFamily: 'Brand_Body_Bold', color: colors.text, fontSize: 16 },
     disabled: { opacity: 0.2 },
 
-    errorText: { fontFamily: 'Brand_Body', color: Colors.textSecondary, fontSize: 16, marginBottom: 20 },
-    retryButton: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: Colors.accent, borderRadius: 20 },
-    retryText: { fontFamily: 'Brand_Body_Bold', color: Colors.primary },
+    errorText: { fontFamily: 'Brand_Body', color: colors.textSecondary, fontSize: 16, marginBottom: 20 },
+    retryButton: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: colors.accent, borderRadius: 20 },
+    retryText: { fontFamily: 'Brand_Body_Bold', color: colors.primary },
 
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
-    modalContent: { backgroundColor: Colors.primary, height: '85%', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+    modalContent: { backgroundColor: colors.primary, height: '85%', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-    modalTitle: { fontFamily: 'Brand_Heading', fontSize: 18, color: Colors.text },
+    modalTitle: { fontFamily: 'Brand_Heading', fontSize: 18, color: colors.text },
     
     listItem: { flexDirection: 'row', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-    listItemText: { fontFamily: 'Brand_Body', fontSize: 16, color: Colors.text },
+    listItemText: { fontFamily: 'Brand_Body', fontSize: 16, color: colors.text },
     
     chapterGrid: { padding: 20, alignItems: 'center' },
     chapterBox: { width: 55, height: 55, margin: 6, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
-    chapterBoxText: { fontFamily: 'Brand_Body_Bold', fontSize: 16, color: Colors.text },
+    chapterBoxText: { fontFamily: 'Brand_Body_Bold', fontSize: 16, color: colors.text },
 });

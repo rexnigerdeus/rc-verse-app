@@ -7,7 +7,7 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // 0. Gestion du CORS (pour que l'app puisse appeler la fonction)
+  // 0. Gestion du CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -23,7 +23,7 @@ serve(async (req) => {
         throw new Error("Missing GEMINI_API_KEY in Secrets!")
     }
 
-    // 2. Appel à Google Gemini (Version 2.5 Flash confirmée par vos logs)
+    // 2. Appel à Google Gemini (Retour au modèle 2.5 Flash qui est actif)
     console.log("Calling Google Gemini API (gemini-2.5-flash)...")
     
     const prompt = `
@@ -41,7 +41,7 @@ serve(async (req) => {
       }
     `
 
-    // NOTEZ LE CHANGEMENT ICI : gemini-2.5-flash
+    // UTILISATION DU MODÈLE ACTUEL ET STABLE : gemini-2.5-flash
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -89,8 +89,6 @@ serve(async (req) => {
 
         if (dbError) {
             console.error("Database Update Failed:", dbError)
-            // On ne bloque pas le retour client même si la sauvegarde échoue, 
-            // mais c'est bien de le loguer.
         }
     }
 
@@ -98,7 +96,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("CRITICAL FUNCTION ERROR:", error.message)
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,

@@ -11,7 +11,7 @@ import {
   Pressable,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { Colors } from "../../constants/colors";
+import { useTheme } from '../../providers/ThemeProvider';
 import i18n from "../../lib/i18n";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../providers/AuthProvider";
@@ -35,6 +35,11 @@ const VerseHistoryItem = ({ item }: { item: HistoryItem }) => {
     return null;
   }
 
+  // 1. Récupération des couleurs dynamiques
+  const { colors } = useTheme();
+  // 2. Génération des styles
+  const styles = createStyles(colors);
+
   return (
     <View style={styles.itemContainer}>
       <Text style={styles.itemDate}>{formattedDate}</Text>
@@ -51,6 +56,11 @@ export default function HistoryScreen() {
   const router = useRouter();
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // 1. Récupération des couleurs dynamiques
+  const { colors } = useTheme();
+  // 2. Génération des styles
+  const styles = createStyles(colors);
 
   useEffect(() => {
     if (!user) return;
@@ -78,7 +88,7 @@ export default function HistoryScreen() {
     return (
       <ScreenWrapper>
         <View style={[styles.container, styles.center]}>
-          <ActivityIndicator color={Colors.text} />
+          <ActivityIndicator color={colors.text} />
         </View>
       </ScreenWrapper>
     );
@@ -93,7 +103,7 @@ export default function HistoryScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Feather name="arrow-left" size={24} color={Colors.text} />
+            <Feather name="arrow-left" size={24} color={colors.text} />
           </Pressable>
           <Text style={styles.headerTitle}>Historique</Text>
           <View style={{width: 24}} />
@@ -113,10 +123,10 @@ export default function HistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   center: {
     justifyContent: "center",
@@ -131,7 +141,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   backButton: { padding: 8 },
-  headerTitle: { fontFamily: 'Brand_Heading', fontSize: 20, color: Colors.text },
+  headerTitle: { fontFamily: 'Brand_Heading', fontSize: 20, color: colors.text },
   itemContainer: {
     backgroundColor: "rgba(0,0,0,0.2)",
     padding: 15,
@@ -146,7 +156,7 @@ const styles = StyleSheet.create({
   },
   itemText: {
     fontFamily: "Lora_400Regular_Italic",
-    color: Colors.text,
+    color: colors.text,
     fontSize: 16,
     lineHeight: 24,
   },

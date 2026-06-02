@@ -10,6 +10,7 @@ interface DailyQuizModalProps {
   onClose: () => void;
 }
 
+// Liste de secours au cas où la table Supabase serait temporairement vide ou inaccessible
 const FALLBACK_QUESTIONS = [
   { question: "Qui a été jeté dans la fosse aux lions ?", options: ["Daniel", "David", "Jonas", "Pierre"], correctAnswer: "Daniel" },
   { question: "Combien de jours Jésus a-t-il jeûné dans le désert ?", options: ["40 jours", "30 jours", "12 jours", "7 jours"], correctAnswer: "40 jours" },
@@ -30,7 +31,6 @@ export function DailyQuizModal({ visible, onClose }: DailyQuizModalProps) {
 
   const [loading, setLoading] = useState(true);
   
-  // État local persistant pendant la session
   const [hasPlayedToday, setHasPlayedToday] = useState(false);
   const [todayScore, setTodayScore] = useState<number | null>(null);
 
@@ -42,13 +42,11 @@ export function DailyQuizModal({ visible, onClose }: DailyQuizModalProps) {
 
   useEffect(() => {
     if (visible && user) {
-      // On réinitialise l'UI du quiz mais PAS le statut de complétion du jour
       setStep(1);
       setScore(0);
       setIsAnswering(false);
       setSelectedOption(null);
       
-      // On ne recharge la DB que si on ne sait pas encore qu'il a joué
       if (!hasPlayedToday) {
         checkAndFetchQuizData();
       }
@@ -61,6 +59,7 @@ export function DailyQuizModal({ visible, onClose }: DailyQuizModalProps) {
     const yesterdayStr = getLocalDateString(-1);
 
     try {
+      // 1. Vérification si le quiz a déjà été joué aujourd'hui
       const { data: historyDataToday } = await supabase
         .from('quiz_history')
         .select('*')
@@ -75,6 +74,29 @@ export function DailyQuizModal({ visible, onClose }: DailyQuizModalProps) {
         return;
       }
 
+      // 2. Récupération des 2 questions bibliques générales depuis VOTRE table
+      const { data: dbQuestions } = await supabase.from('quiz_questions').select('*');
+      let generalQuestions = [];
+      
+      if (dbQuestions && dbQuestions.length >= 2) {
+        generalQuestions = dbQuestions
+          .sort(() => 0.5 - Math.random()) // Mélange aléatoire
+          .slice(0, 2) // On en garde seulement 2
+          .map(q => ({
+            question: q.question,
+            options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options,
+            correctAnswer: q.correct_answer,
+            explanation: q.explanation
+          }));
+      } else {
+        // Fallback si la table est vide
+        generalQuestions = [...FALLBACK_QUESTIONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+      }
+
+      // 3. Récupération du verset (Question 1) avec filet de sécurité
+      let historyData = null;
+      
+      // On tente de récupérer le verset d'hier
       const { data: historyDataYesterday } = await supabase
         .from('verse_history')
         .select('*, verses(*)')
@@ -82,33 +104,61 @@ export function DailyQuizModal({ visible, onClose }: DailyQuizModalProps) {
         .eq('viewed_on', yesterdayStr)
         .single();
 
-      const shuffledFallback = [...FALLBACK_QUESTIONS].sort(() => 0.5 - Math.random()).slice(0, 2);
-      let q1 = null;
+      if (historyDataYesterday) {
+        historyData = historyDataYesterday;
+      } else {
+        // Si aucun verset lu hier, on récupère le tout dernier verset lu
+        const { data: lastViewed } = await supabase
+          .from('verse_history')
+          .select('*, verses(*)')
+          .eq('user_id', user.id)
+          .order('viewed_on', { ascending: false })
+          .limit(1)
+          .single();
+        historyData = lastViewed;
+      }
 
-      if (historyDataYesterday && historyDataYesterday.verses) {
-        const verse = historyDataYesterday.verses;
+      // Si l'utilisateur est totalement nouveau et n'a aucun historique, on prend un verset aléatoire
+      if (!historyData || !historyData.verses) {
+        const { data: randomVerse } = await supabase.from('verses').select('*').limit(1).single();
+        if (randomVerse) historyData = { verses: randomVerse };
+      }
+
+      // 4. Construction de la Question 1 (Verset à trous)
+      let q1 = null;
+      if (historyData && historyData.verses) {
+        const verse = historyData.verses;
         const words = verse.text.split(' ');
         
+        // Retirer 2 à 3 mots (sans toucher au tout premier ou dernier mot pour garder du sens)
         const wordsToRemove = Math.min(3, Math.max(2, Math.floor(words.length / 4))); 
-        const startIndex = Math.floor(Math.random() * (words.length - wordsToRemove));
+        const maxStartIndex = Math.max(1, words.length - wordsToRemove - 1);
+        const startIndex = Math.min(Math.max(1, Math.floor(Math.random() * maxStartIndex)), words.length - wordsToRemove);
         
         const maskedText = words.map((w: string, i: number) => 
           (i >= startIndex && i < startIndex + wordsToRemove) ? "_____" : w
         ).join(' ');
 
         const trueRef = `${verse.book} ${verse.chapter}:${verse.verse_number}`;
-        const fakeRefs = [`${verse.book} ${Number(verse.chapter) + 1}:2`, `Psaumes 23:1`, `Proverbes 3:5`, `Jean 3:16`, `Romains 8:28`]
-          .filter(r => r !== trueRef).sort(() => 0.5 - Math.random()).slice(0, 3);
+        const fakeRefs = [
+            `${verse.book} ${Number(verse.chapter) + 1}:2`, 
+            `Psaumes 23:1`, 
+            `Proverbes 3:5`, 
+            `Jean 3:16`, 
+            `Romains 8:28`
+        ].filter(r => r !== trueRef).sort(() => 0.5 - Math.random()).slice(0, 3);
 
         q1 = {
-          question: "De quel livre est tiré ce verset d'hier ?",
+          question: "Devinez les mots manquants et choisissez la bonne référence :",
           textWithBlank: maskedText,
           options: [trueRef, ...fakeRefs].sort(() => 0.5 - Math.random()),
           correctAnswer: trueRef
         };
       }
 
-      setQuestions(q1 ? [q1, ...shuffledFallback] : [...shuffledFallback, FALLBACK_QUESTIONS[2]]);
+      // On assemble les 3 questions
+      setQuestions(q1 ? [q1, ...generalQuestions] : [...generalQuestions, FALLBACK_QUESTIONS[2]]);
+      
     } catch (err) {
       console.error(err);
     } finally {
@@ -146,7 +196,6 @@ export function DailyQuizModal({ visible, onClose }: DailyQuizModalProps) {
         score: finalScore,
         played_on: getLocalDateString(0)
       });
-      // Verrouille instantanément l'accès pour la session actuelle
       setHasPlayedToday(true);
     } catch (error) {
       console.log("Erreur lors de la sauvegarde du score", error);
@@ -212,7 +261,7 @@ export function DailyQuizModal({ visible, onClose }: DailyQuizModalProps) {
               )}
 
               <View style={styles.optionsGrid}>
-                {questions[step - 1]?.options.map((opt: string, i: number) => {
+                {questions[step - 1]?.options?.map((opt: string, i: number) => {
                   const s = getOptionStyle(opt, questions[step - 1].correctAnswer);
                   return (
                     <Pressable key={i} style={[styles.optionBtn, { backgroundColor: s.backgroundColor, borderColor: s.borderColor }]} onPress={() => handleOptionSelect(opt)}>

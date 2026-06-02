@@ -17,13 +17,26 @@ export default function ProfileScreen() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [suggestion, setSuggestion] = useState('');
   const [sending, setSending] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false); 
+  
+  const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+  
   const [quizStats, setQuizStats] = useState({ totalPlayed: 0, averageScore: 0 });
 
   const metadata = session?.user?.user_metadata;
   const rawName = metadata?.first_name || metadata?.name || session?.user?.email?.split('@')[0] || "Utilisateur";
   const displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
   const userEmail = session?.user?.email;
+
+  // --- HELPER D'ALERTE MULTIPLATEFORME ---
+  const showAlert = (title: string, message: string) => {
+      if (Platform.OS === 'web') {
+          window.alert(`${title} : ${message}`);
+      } else {
+          Alert.alert(title, message);
+      }
+  };
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -48,27 +61,58 @@ export default function ProfileScreen() {
   };
 
   const handleSendSuggestion = async () => {
-    if (!suggestion.trim()) return;
+    if (!suggestion.trim()) {
+        showAlert("Erreur", "Veuillez écrire une suggestion avant d'envoyer.");
+        return;
+    }
     setSending(true);
     const { error } = await supabase.from('suggestions').insert({ user_id: session?.user.id, content: suggestion, email: userEmail });
     setSending(false);
     if (!error) {
       setSuggestion('');
-      Alert.alert("Merci !", "Votre suggestion a été bien reçue.");
+      showAlert("Merci !", "Votre suggestion a été bien reçue. Nous la lirons avec attention.");
+    } else {
+      showAlert("Erreur", "Impossible d'envoyer votre suggestion.");
     }
   };
 
+  const handleUpdatePassword = async () => {
+    if (!newPassword || newPassword.length < 6) {
+        showAlert("Erreur", "Le mot de passe doit contenir au moins 6 caractères.");
+        return;
+    }
+    setUpdatingPassword(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setUpdatingPassword(false);
+    
+    if (error) {
+        showAlert("Erreur", error.message);
+    } else {
+        setNewPassword(''); // On vide le champ
+        showAlert("Succès", "Votre mot de passe a été mis à jour avec succès !");
+    }
+  };
+
+  const confirmDeletion = () => {
+      if (Platform.OS === 'web') {
+          const confirmed = window.confirm("Supprimer le compte : Êtes-vous absolument sûr ? Cette action est irréversible.");
+          if (confirmed) executeDeletion();
+      } else {
+          Alert.alert("Supprimer le compte", "Êtes-vous absolument sûr ? Cette action est irréversible.", [
+              { text: "Annuler", style: "cancel" },
+              { text: "Supprimer", style: 'destructive', onPress: executeDeletion }
+          ]);
+      }
+  };
+
   const executeDeletion = async () => {
-    setIsDeleting(true);
     try {
       const { error } = await supabase.rpc('delete_user');
       if (error) throw error;
       await signOut();
       router.replace('/(auth)/login'); 
     } catch (error: any) {
-      Alert.alert("Erreur", "Impossible de supprimer le compte.");
-    } finally {
-      setIsDeleting(false);
+      showAlert("Erreur", "Impossible de supprimer le compte.");
     }
   };
 
@@ -126,9 +170,31 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Sécurité</Text>
+            
+            <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Nouveau mot de passe"
+                  placeholderTextColor={colors.textTertiary}
+                  secureTextEntry={!showPassword}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                />
+                <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+                    <Feather name={showPassword ? "eye-off" : "eye"} size={20} color={colors.textSecondary} />
+                </Pressable>
+            </View>
+
+            <Pressable style={[styles.sendButton, updatingPassword && styles.buttonDisabled]} onPress={handleUpdatePassword} disabled={updatingPassword}>
+              {updatingPassword ? <ActivityIndicator color={colors.primary} size="small" /> : <Text style={styles.sendButtonText}>Changer mon mot de passe</Text>}
+            </Pressable>
+          </View>
+
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>Une idée pour l'application ?</Text>
             <TextInput
-              style={styles.input}
+              style={styles.inputArea}
               placeholder="Écrivez votre suggestion ici..."
               placeholderTextColor={colors.textTertiary}
               multiline
@@ -137,7 +203,7 @@ export default function ProfileScreen() {
               onChangeText={setSuggestion}
             />
             <Pressable style={[styles.sendButton, sending && styles.buttonDisabled]} onPress={handleSendSuggestion} disabled={sending}>
-              {sending ? <ActivityIndicator color={colors.primary} /> : <Text style={styles.sendButtonText}>Envoyer ma suggestion</Text>}
+              {sending ? <ActivityIndicator color={colors.primary} size="small" /> : <Text style={styles.sendButtonText}>Envoyer ma suggestion</Text>}
             </Pressable>
           </View>
 
@@ -152,7 +218,7 @@ export default function ProfileScreen() {
                   <Text style={styles.actionText}>Se déconnecter</Text>
               </Pressable>
 
-              <Pressable style={styles.actionButton} onPress={() => Alert.alert("Supprimer", "Êtes-vous sûr ?", [{text: "Annuler"}, {text: "Supprimer", style: 'destructive', onPress: executeDeletion}])}>
+              <Pressable style={styles.actionButton} onPress={confirmDeletion}>
                   <Feather name="trash-2" size={16} color={colors.error} />
                   <Text style={[styles.actionText, {color: colors.error}]}>Supprimer le compte</Text>
               </Pressable>
@@ -193,12 +259,22 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   themeToggleLabel: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   themeText: { fontFamily: 'Brand_Body', fontSize: 15, color: colors.text },
 
-  input: {
+  passwordContainer: {
+      flexDirection: 'row', alignItems: 'center',
+      backgroundColor: colors.primary, 
+      borderRadius: 12, borderWidth: 1, borderColor: colors.border,
+      marginBottom: 16,
+  },
+  passwordInput: { flex: 1, padding: 14, color: colors.text, fontFamily: 'Brand_Body' },
+  eyeIcon: { padding: 15 },
+
+  inputArea: {
     backgroundColor: colors.primary, borderRadius: 12, padding: 14,
     color: colors.text, fontFamily: 'Brand_Body',
     minHeight: 100, textAlignVertical: 'top', marginBottom: 16,
     borderWidth: 1, borderColor: colors.border,
   },
+  
   sendButton: { backgroundColor: colors.text, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
   buttonDisabled: { opacity: 0.7 },
   sendButtonText: { fontFamily: 'Brand_Body_Bold', color: colors.primary, fontSize: 14 },

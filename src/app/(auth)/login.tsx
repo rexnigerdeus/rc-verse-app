@@ -1,21 +1,43 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image, Linking } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../providers/ThemeProvider';
 import { useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
+
+// Numéro de l'administration pour le reset du mot de passe
+const ADMIN_WHATSAPP = "+2250778554483";
 
 export default function LoginScreen() {
     const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const router = useRouter();
 
     const { colors, isDark } = useTheme();
     const styles = createStyles(colors, isDark);
 
+    // Helper d'Alerte compatible multiplateforme
+    const showInteractiveAlert = (title: string, message: string, onConfirm?: () => void) => {
+        if (Platform.OS === 'web') {
+            const userAgreed = window.confirm(`${title}\n\n${message}`);
+            if (userAgreed && onConfirm) onConfirm();
+        } else {
+            if (onConfirm) {
+                Alert.alert(title, message, [
+                    { text: "Annuler", style: "cancel" },
+                    { text: "Contacter l'Admin", onPress: onConfirm }
+                ]);
+            } else {
+                Alert.alert(title, message);
+            }
+        }
+    };
+
     const handleSignIn = async () => {
         if (!phone || !password) {
-            Alert.alert('Erreur', 'Veuillez entrer votre numéro et mot de passe.');
+            showInteractiveAlert('Erreur', 'Veuillez entrer votre numéro et mot de passe.');
             return;
         }
 
@@ -31,18 +53,44 @@ export default function LoginScreen() {
             });
 
             if (error) {
-                Alert.alert('Erreur de connexion', 'Numéro ou mot de passe incorrect.');
+                showInteractiveAlert('Erreur de connexion', 'Numéro ou mot de passe incorrect.');
             }
         } catch (err: any) {
-            Alert.alert('Erreur', err.message);
+            showInteractiveAlert('Erreur', err.message);
         } finally {
             setLoading(false);
         }
     };
 
+    const handleForgotPassword = () => {
+        if (!phone || phone.trim() === '') {
+            showInteractiveAlert(
+                "Action requise", 
+                "Veuillez d'abord saisir votre numéro de téléphone dans le champ prévu à cet effet avant de demander une réinitialisation."
+            );
+            return;
+        }
+
+        showInteractiveAlert(
+            "Mot de passe oublié",
+            `Voulez-vous contacter l'administration via WhatsApp pour réinitialiser le compte lié au ${phone} ?`,
+            () => {
+                const messageText = encodeURIComponent(`Bonjour l'équipe Revival Culture,\nJe souhaite réinitialiser le mot de passe de mon compte lié au numéro : ${phone}.`);
+                const url = `https://wa.me/${ADMIN_WHATSAPP.replace(/\+| /g, '')}?text=${messageText}`;
+                
+                Linking.canOpenURL(url).then(supported => {
+                    if (supported) {
+                        Linking.openURL(url);
+                    } else {
+                        showInteractiveAlert("Erreur", "L'application WhatsApp n'est pas installée sur cet appareil.");
+                    }
+                });
+            }
+        );
+    };
+
     return (
         <View style={styles.container}>
-            {/* Illustration Zen en arrière-plan */}
             <Image 
                 source={{ uri: 'https://images.unsplash.com/photo-1508614999368-9260051292e5?q=80&w=1000&auto=format&fit=crop' }} 
                 style={styles.backgroundImage}
@@ -72,14 +120,23 @@ export default function LoginScreen() {
                         />
 
                         <Text style={styles.label}>Mot de passe</Text>
-                        <TextInput 
-                            style={styles.input} 
-                            placeholder="••••••" 
-                            placeholderTextColor={colors.textTertiary}
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry
-                        />
+                        <View style={styles.passwordContainer}>
+                            <TextInput 
+                                style={styles.passwordInput} 
+                                placeholder="••••••" 
+                                placeholderTextColor={colors.textTertiary}
+                                value={password}
+                                onChangeText={setPassword}
+                                secureTextEntry={!showPassword}
+                            />
+                            <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+                                <Feather name={showPassword ? "eye-off" : "eye"} size={20} color={colors.textSecondary} />
+                            </Pressable>
+                        </View>
+
+                        <Pressable onPress={handleForgotPassword} style={styles.forgotPassword}>
+                            <Text style={styles.forgotPasswordText}>Mot de passe oublié ?</Text>
+                        </Pressable>
 
                         <Pressable 
                             onPress={handleSignIn} 
@@ -100,7 +157,6 @@ export default function LoginScreen() {
                             </Pressable>
                         </View>
                     </View>
-
                 </ScrollView>
             </KeyboardAvoidingView>
         </View>
@@ -109,17 +165,12 @@ export default function LoginScreen() {
 
 const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.primary },
-    
-    // Background Image Styles
     backgroundImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', opacity: isDark ? 0.3 : 0.25 },
     backgroundOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.primary, opacity: 0.45 },
-    
     scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 },
-    
     logoContainer: { alignItems: 'center', marginBottom: 40 },
     brandTitle: { fontFamily: 'Brand_Heading', fontSize: 28, color: colors.text, letterSpacing: 2 },
     brandSubtitle: { fontFamily: 'Brand_Body_Bold', fontSize: 12, color: colors.accent, letterSpacing: 4, marginTop: 6 },
-    
     formContainer: { 
         backgroundColor: colors.surfaceBase, 
         padding: 32, 
@@ -129,23 +180,25 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
         shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.05, shadowRadius: 20, elevation: 5
     },
     header: { fontFamily: 'Brand_Heading', fontSize: 22, color: colors.text, textAlign: 'center', marginBottom: 30 },
-    
     label: { fontFamily: 'Brand_Body_Bold', color: colors.textSecondary, marginBottom: 8, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 },
     input: { 
         backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : colors.primary, 
-        borderRadius: 16, 
-        paddingHorizontal: 20, 
-        paddingVertical: 18, 
-        color: colors.text, 
-        fontFamily: 'Brand_Body', 
-        marginBottom: 24, 
-        borderWidth: 1, 
-        borderColor: colors.border 
+        borderRadius: 16, paddingHorizontal: 20, paddingVertical: 18, 
+        color: colors.text, fontFamily: 'Brand_Body', marginBottom: 24, 
+        borderWidth: 1, borderColor: colors.border 
     },
-    
-    button: { backgroundColor: colors.accent, paddingVertical: 18, borderRadius: 24, alignItems: 'center', marginTop: 10 },
+    passwordContainer: {
+        flexDirection: 'row', alignItems: 'center',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : colors.primary, 
+        borderRadius: 16, borderWidth: 1, borderColor: colors.border,
+        marginBottom: 12, // Espace avant le texte "mot de passe oublié"
+    },
+    passwordInput: { flex: 1, paddingHorizontal: 20, paddingVertical: 18, color: colors.text, fontFamily: 'Brand_Body' },
+    eyeIcon: { padding: 15 },
+    forgotPassword: { alignSelf: 'flex-end', marginBottom: 24, paddingVertical: 5 },
+    forgotPasswordText: { color: colors.accent, fontFamily: 'Brand_Body_Bold', fontSize: 13 },
+    button: { backgroundColor: colors.accent, paddingVertical: 18, borderRadius: 24, alignItems: 'center' },
     buttonText: { fontFamily: 'Brand_Body_Bold', color: isDark ? colors.primary : '#FFFFFF', fontSize: 15 },
-    
     footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 30 },
     footerText: { color: colors.textSecondary, fontFamily: 'Brand_Body', fontSize: 14 },
     linkText: { color: colors.text, fontFamily: 'Brand_Body_Bold', fontSize: 14 },

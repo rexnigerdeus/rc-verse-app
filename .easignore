@@ -1,7 +1,3 @@
 node_modules/
-.expo/
-.git/
-dist/
-web-build/
-*.ipa
-*.apk
+ios/
+android/

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Revival : Mon Quotidien",
     "slug": "mon-quotidien",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
@@ -18,7 +18,8 @@
       "infoPlist": {
         "CFBundleDisplayName": "Mon Quotidien",
         "NSCameraUsageDescription": "This app uses the camera to scan for...",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["audio"]
       }
     },
     "android": {
@@ -46,14 +47,15 @@
     "plugins": [
       [
         "expo-router",
-          {
-            "origin": "https://revculture.ci" 
-          }
+        {
+          "origin": "https://revculture.ci"
+        }
       ],
       "expo-localization",
       "expo-font",
       "expo-sqlite",
-      "expo-asset"
+      "expo-asset",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

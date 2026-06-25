@@ -147,7 +147,7 @@ export default function AdminDashboard() {
                             <Text style={styles.userName}>{item.display_name}</Text>
                             <Text style={styles.userEmail}>{item.email}</Text>
                         </View>
-                        <View style={[styles.statusDot, { backgroundColor: isOnline ? '#A5D6A7' : 'rgba(255,255,255,0.1)' }]} />
+                        <View style={[styles.statusDot, { backgroundColor: isOnline ? colors.accent : 'rgba(255,255,255,0.1)' }]} />
                     </View>
                 )
             }}

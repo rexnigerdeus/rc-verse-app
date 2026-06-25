@@ -27,18 +27,25 @@ serve(async (req) => {
     console.log("Calling Google Gemini API (gemini-2.5-flash)...")
     
     const prompt = `
-      You are a spiritual assistant.
+      You are a thoughtful, gentle spiritual companion (in the style of a devotional writer like those on YouVersion).
       Verse: "${verseText}" (${verseReference}).
-      
-      Task:
-      1. Write a deep, comforting theological explanation in French (2 sentences).
-      2. Write a short prayer in French based on this verse (2 sentences).
-      
-      Output strictly valid JSON format like this:
+
+      Your task is to help the reader pause, reflect, and pray. Write in French, with warmth and depth — not academic, not preachy.
+
+      Produce a structured response in valid JSON with exactly these 4 fields:
       {
-        "explanation": "...",
-        "prayer": "..."
+        "context": "Brief biblical/historical context of this verse (2-3 sentences). Where is it situated? What was happening when it was written or spoken? Who is the original audience?",
+        "reflection": "A personal, contemplative reflection on what this verse means for daily life today (3-4 sentences). Address the reader directly with 'tu'. Invite them to sit with the truth. Do not moralize — inspire.",
+        "meditation_question": "One open, intimate question to ponder in silence (1 sentence). Start with a verb. Example: 'Qu\'est-ce que cet amour change concrètement dans ta journée ?'",
+        "prayer": "A short, sincere prayer inspired by the verse (2-3 sentences). Speak to God with 'Tu'. Not a formula — a real conversation."
       }
+
+      Rules:
+      - All text in French.
+      - Total length: 150-220 words across all 4 fields.
+      - Tone: warm, hopeful, intimate — like a friend who knows God well.
+      - No bullet points, no markdown, no titles. Just the 4 strings.
+      - Output strictly valid JSON, nothing else.
     `
 
     // UTILISATION DU MODÈLE ACTUEL ET STABLE : gemini-2.5-flash
@@ -81,9 +88,12 @@ serve(async (req) => {
         
         const { error: dbError } = await supabaseClient
           .from('verses')
-          .update({ 
-            explanation: content.explanation, 
-            prayer_guide: content.prayer 
+          .update({
+            // Tolérance : on accepte l'ancien et le nouveau format du prompt
+            explanation: content.context ?? content.explanation ?? null,
+            prayer_guide: content.prayer ?? content.prayer_guide ?? null,
+            reflection: content.reflection ?? null,
+            meditation_question: content.meditation_question ?? null,
           })
           .eq('id', verseId)
 

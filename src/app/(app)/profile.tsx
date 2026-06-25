@@ -5,14 +5,19 @@ import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../providers/AuthProvider';
 import { supabase } from '../../lib/supabase';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
-import { useTheme } from '../../providers/ThemeProvider'; 
+import { useTheme } from '../../providers/ThemeProvider';
+import { useStreak } from '../../hooks/useStreak';
+import { FlameIcon } from '../../components/FlameIcon';
+import { StreakModal } from '../../components/StreakModal';
 
 export default function ProfileScreen() {
   const { session, signOut } = useAuth();
   const router = useRouter();
-  
+
   const { colors, isDark, setTheme } = useTheme();
   const styles = createStyles(colors, isDark);
+  const streak = useStreak();
+  const [streakVisible, setStreakVisible] = useState(false);
   
   const [isAdmin, setIsAdmin] = useState(false);
   const [suggestion, setSuggestion] = useState('');
@@ -152,6 +157,45 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          {/* --- CARTE FLAMME / STREAK --- */}
+          <Pressable
+            onPress={() => setStreakVisible(true)}
+            style={[
+              styles.streakCard,
+              {
+                backgroundColor: streak.isAliveToday
+                  ? isDark
+                    ? 'rgba(240, 176, 48, 0.10)'
+                    : 'rgba(240, 168, 104, 0.12)'
+                  : colors.surfaceBase,
+                borderColor: streak.isAliveToday
+                  ? isDark
+                    ? 'rgba(240, 176, 48, 0.35)'
+                    : 'rgba(240, 168, 104, 0.4)'
+                  : colors.border,
+              },
+            ]}
+          >
+            <FlameIcon
+              size={48}
+              active={streak.isAliveToday}
+              intensity={streak.count >= 14 ? 'high' : streak.count >= 3 ? 'mid' : 'low'}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.streakCount}>
+                {streak.count} {streak.count > 1 ? 'jours' : 'jour'}
+              </Text>
+              <Text style={styles.streakSubtitle}>
+                {streak.isAliveToday
+                  ? 'Ta flamme brûle aujourd\'hui 🔥'
+                  : streak.count === 0
+                  ? 'Allume ta première flamme'
+                  : 'Rallume ta flamme aujourd\'hui'}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.textTertiary} />
+          </Pressable>
+
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Apparence</Text>
             <View style={styles.themeToggleRow}>
@@ -225,6 +269,7 @@ export default function ProfileScreen() {
           </View>
 
         </ScrollView>
+        <StreakModal visible={streakVisible} onClose={() => setStreakVisible(false)} />
       </KeyboardAvoidingView>
     </ScreenWrapper>
   );
@@ -251,6 +296,28 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   statDivider: { width: 1, backgroundColor: colors.border, marginHorizontal: 16 },
   statValue: { fontFamily: 'Brand_Heading', fontSize: 28, color: colors.accentWarm, marginBottom: 4 },
   statLabel: { fontFamily: 'Brand_Body_Bold', fontSize: 11, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  streakCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginTop: 16,
+  },
+  streakCount: {
+    fontFamily: 'Brand_Heading',
+    fontSize: 18,
+    color: colors.text,
+    letterSpacing: -0.3,
+  },
+  streakSubtitle: {
+    fontFamily: 'Brand_Body',
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
 
   section: { backgroundColor: colors.surfaceBase, padding: 20, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
   sectionTitle: { fontFamily: 'Brand_Body_Bold', fontSize: 16, color: colors.text, marginBottom: 16 },

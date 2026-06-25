@@ -24,14 +24,44 @@ import { useAuth } from "../../providers/AuthProvider";
 import { Database } from "../../types/database.types";
 import { ScreenWrapper } from "../../components/ScreenWrapper"; 
 import { DailyQuizModal } from "../../components/DailyQuizModal";
+import { FlameBadge } from "../../components/FlameBadge";
+import { StreakModal } from "../../components/StreakModal";
 
 type Verse = Database["public"]["Tables"]["verses"]["Row"] & {
   explanation?: string;
   prayer_guide?: string;
+  reflection?: string;
+  meditation_question?: string;
 };
 
-const STORAGE_KEY_VERSE = 'revival_daily_verse_data_v3';
-const STORAGE_KEY_DATE = 'revival_daily_verse_date_v3';
+// v4 : introduction des champs reflection et meditation_question (format YouVersion-like).
+// On bumpe la clé pour invalider tous les caches des versions précédentes.
+// L'app rechargera depuis Supabase et régénérera via Gemini si nécessaire.
+const STORAGE_KEY_VERSE = 'revival_daily_verse_data_v4';
+const STORAGE_KEY_DATE = 'revival_daily_verse_date_v4';
+
+// Toutes les clés historiques à nettoyer au démarrage
+const LEGACY_KEYS = [
+  'revival_daily_verse_data_v1',
+  'revival_daily_verse_date_v1',
+  'revival_daily_verse_data_v2',
+  'revival_daily_verse_date_v2',
+  'revival_daily_verse_data_v3',
+  'revival_daily_verse_date_v3',
+];
+
+/**
+ * Nettoie les caches des versions précédentes.
+ * Appelé au montage de la Home pour garantir que tout utilisateur
+ * (mobile ou web) repart sur le nouveau format de cache.
+ */
+async function purgeLegacyCaches(): Promise<void> {
+  try {
+    await AsyncStorage.multiRemove(LEGACY_KEYS);
+  } catch {
+    /* silencieux */
+  }
+}
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -42,6 +72,7 @@ export default function HomeScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [quizVisible, setQuizVisible] = useState(false);
+  const [streakVisible, setStreakVisible] = useState(false);
 
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors, isDark);
@@ -55,6 +86,10 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!user) return;
 
+    // 0. Purge des caches des versions précédentes pour forcer la régénération
+    //    dans le nouveau format (context / reflection / meditation_question / prayer)
+    purgeLegacyCaches();
+
     const loadDailyVerse = async () => {
       setIsLoading(true);
       setError(null);
@@ -65,9 +100,27 @@ export default function HomeScreen() {
         const storedVerseString = await AsyncStorage.getItem(STORAGE_KEY_VERSE);
 
         if (storedDate === today && storedVerseString) {
-          setVerse(JSON.parse(storedVerseString));
+          const cached = JSON.parse(storedVerseString) as Verse;
+
+          // Cache complet ? On l'utilise directement.
+          // Sinon on régénère via Gemini pour récupérer les champs manquants.
+          const isComplete =
+            cached.explanation &&
+            cached.reflection &&
+            cached.meditation_question &&
+            cached.prayer_guide;
+
+          if (isComplete) {
+            setVerse(cached);
+            setIsLoading(false);
+            return;
+          }
+          // Cache partiel → on l'affiche tout de suite (UI réactive),
+          // puis on régénère le contenu dévotionnel en tâche de fond.
+          setVerse(cached);
           setIsLoading(false);
-          return; 
+          regenerateDevotional(cached);
+          return;
         }
 
         const { data: historyData } = await supabase
@@ -115,6 +168,48 @@ export default function HomeScreen() {
     await AsyncStorage.setItem(STORAGE_KEY_VERSE, JSON.stringify(verseToSave));
   };
 
+  /**
+   * Régénère le contenu dévotionnel d'un verset (context / reflection /
+   * meditation_question / prayer) via Gemini. Utilisé :
+   *  - Quand le cache est partiel (ancien format sans les nouveaux champs)
+   *  - Quand l'utilisateur rouvre "Approfondir" sur un verset jamais enrichi
+   *
+   * N'écrase le cache qu'une fois la régénération terminée.
+   */
+  const regenerateDevotional = async (currentVerse: Verse) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-verse-content', {
+        body: {
+          verseText: currentVerse.text,
+          verseReference: `${currentVerse.book} ${currentVerse.chapter}:${currentVerse.verse_number}`,
+          verseId: currentVerse.id,
+        },
+      });
+      if (error) throw error;
+      if (!data) return;
+
+      const updated: Verse = {
+        ...currentVerse,
+        explanation: data.explanation ?? data.context ?? currentVerse.explanation ?? '',
+        prayer_guide: data.prayer_guide ?? data.prayer ?? currentVerse.prayer_guide ?? '',
+        meditation_question: data.meditation_question ?? currentVerse.meditation_question ?? '',
+        reflection: data.reflection ?? currentVerse.reflection ?? '',
+      };
+
+      // N'écrase le cache que si on a effectivement récupéré du nouveau contenu
+      const hasNewContent =
+        (data.reflection && !currentVerse.reflection) ||
+        (data.meditation_question && !currentVerse.meditation_question);
+
+      if (hasNewContent) {
+        await saveToCache(getTodayDateString(), updated);
+      }
+    } catch (e) {
+      // silencieux : si la régénération échoue, on garde le cache existant
+      console.warn('[verse] devotional regeneration failed', e);
+    }
+  };
+
   const handleShare = async () => {
     if (!verse) return;
     try {
@@ -129,36 +224,17 @@ export default function HomeScreen() {
 
   const openDeepenModal = async () => {
     setModalVisible(true);
-    if (verse?.explanation && verse?.prayer_guide) return;
+    // On régénère si un seul des 4 champs dévotionnels manque.
+    const isComplete =
+      verse?.explanation &&
+      verse?.reflection &&
+      verse?.meditation_question &&
+      verse?.prayer_guide;
+    if (isComplete) return;
+
     setIsGeneratingAI(true);
-
-    try {
-        const { data, error } = await supabase.functions.invoke('generate-verse-content', {
-            body: { 
-                verseText: verse?.text,
-                verseReference: `${verse?.book} ${verse?.chapter}:${verse?.verse_number}`,
-                verseId: verse?.id
-            }
-        });
-
-        if (error) throw error;
-
-        if (data && verse) {
-            const updatedVerse = { 
-                ...verse, 
-                explanation: data.explanation, 
-                prayer_guide: data.prayer 
-            };
-            setVerse(updatedVerse);
-            await saveToCache(getTodayDateString(), updatedVerse);
-        }
-
-    } catch (err) {
-        Alert.alert("Erreur", "Le service est momentanément indisponible.");
-        setModalVisible(false);
-    } finally {
-        setIsGeneratingAI(false);
-    }
+    if (verse) await regenerateDevotional(verse);
+    setIsGeneratingAI(false);
   };
 
   const renderContent = () => {
@@ -293,6 +369,7 @@ export default function HomeScreen() {
             </View>
             
             <View style={styles.headerRight}>
+              <FlameBadge onPress={() => setStreakVisible(true)} />
               <Link href="/history" asChild>
                   <Pressable style={styles.iconButton}>
                       <Feather name="clock" size={18} color={colors.textSecondary} />
@@ -329,9 +406,9 @@ export default function HomeScreen() {
                     </View>
 
                     <ScrollView contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
-                        <Text style={styles.modalMainTitle}>Comprendre et intégrer {verse?.book} {verse?.chapter}</Text>
-                        <Text style={styles.modalMetaInfo}>Revival Culture • 3 minutes de lecture</Text>
-                        
+                        <Text style={styles.modalMainTitle}>Comprendre et méditer {verse?.book} {verse?.chapter}</Text>
+                        <Text style={styles.modalMetaInfo}>Revival Culture • 4 minutes de lecture</Text>
+
                         <View style={styles.modalSeparator} />
 
                         {isGeneratingAI ? (
@@ -340,12 +417,59 @@ export default function HomeScreen() {
                                 <Text style={styles.loadingText}>Connexion au sanctuaire...</Text>
                             </View>
                         ) : (
-                            <>
-                                <Text style={styles.modalText}>{verse?.explanation}</Text>
-                                <Text style={[styles.modalText, {fontFamily: 'Brand_Italic', marginTop: 20, borderLeftWidth: 2, borderLeftColor: colors.accentWarm, paddingLeft: 16}]}>
-                                    {verse?.prayer_guide}
-                                </Text>
-                            </>
+                            <View>
+                                {/* Contexte */}
+                                {verse?.explanation ? (
+                                    <View style={styles.devotionalSection}>
+                                        <View style={styles.devotionalHeader}>
+                                            <View style={[styles.devotionalIcon, { backgroundColor: 'rgba(240, 168, 104, 0.15)' }]}>
+                                                <Feather name="book-open" size={14} color={colors.accentWarm} />
+                                            </View>
+                                            <Text style={styles.devotionalLabel}>Contexte</Text>
+                                        </View>
+                                        <Text style={styles.modalText}>{verse.explanation}</Text>
+                                    </View>
+                                ) : null}
+
+                                {/* Réflexion */}
+                                {verse?.reflection ? (
+                                    <View style={styles.devotionalSection}>
+                                        <View style={styles.devotionalHeader}>
+                                            <View style={[styles.devotionalIcon, { backgroundColor: 'rgba(155, 126, 189, 0.15)' }]}>
+                                                <Feather name="feather" size={14} color={colors.accentSecondary} />
+                                            </View>
+                                            <Text style={styles.devotionalLabel}>Réflexion</Text>
+                                        </View>
+                                        <Text style={styles.modalText}>{verse.reflection}</Text>
+                                    </View>
+                                ) : null}
+
+                                {/* Question méditative */}
+                                {verse?.meditation_question ? (
+                                    <View style={[styles.devotionalSection, styles.meditationBox]}>
+                                        <View style={styles.devotionalHeader}>
+                                            <View style={[styles.devotionalIcon, { backgroundColor: 'rgba(240, 176, 48, 0.15)' }]}>
+                                                <Feather name="help-circle" size={14} color={colors.accent} />
+                                            </View>
+                                            <Text style={styles.devotionalLabel}>À méditer</Text>
+                                        </View>
+                                        <Text style={styles.meditationQuestion}>{verse.meditation_question}</Text>
+                                    </View>
+                                ) : null}
+
+                                {/* Prière */}
+                                {verse?.prayer_guide ? (
+                                    <View style={[styles.devotionalSection, styles.prayerBox]}>
+                                        <View style={styles.devotionalHeader}>
+                                            <View style={[styles.devotionalIcon, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(26, 23, 20, 0.06)' }]}>
+                                                <Feather name="cloud-lightning" size={14} color={colors.text} />
+                                            </View>
+                                            <Text style={styles.devotionalLabel}>Prière</Text>
+                                        </View>
+                                        <Text style={[styles.modalText, styles.prayerText]}>{verse.prayer_guide}</Text>
+                                    </View>
+                                ) : null}
+                            </View>
                         )}
                     </ScrollView>
 
@@ -360,6 +484,7 @@ export default function HomeScreen() {
         </Modal>
 
         <DailyQuizModal visible={quizVisible} onClose={() => setQuizVisible(false)} />
+        <StreakModal visible={streakVisible} onClose={() => setStreakVisible(false)} />
 
       </KeyboardAvoidingView>
     </ScreenWrapper>
@@ -416,6 +541,28 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   loadingText: { fontFamily: 'Brand_Body', color: colors.textTertiary, fontSize: 14 },
   
   modalText: { fontFamily: 'Brand_Body', fontSize: 16, color: colors.text, lineHeight: 28 }, // Réduit de 18 à 16
+
+  // Sections dévotionnelles (style YouVersion)
+  devotionalSection: { marginBottom: 22 },
+  devotionalHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  devotionalIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  devotionalLabel: { fontFamily: 'Brand_Body_Bold', fontSize: 11, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1.2 },
+  meditationBox: {
+    backgroundColor: isDark ? 'rgba(240, 176, 48, 0.08)' : 'rgba(240, 168, 104, 0.10)',
+    borderRadius: 16,
+    padding: 18,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.accent,
+  },
+  meditationQuestion: { fontFamily: 'Brand_Italic', fontSize: 17, color: colors.text, lineHeight: 26 },
+  prayerBox: {
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(26, 23, 20, 0.03)',
+    borderRadius: 16,
+    padding: 18,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.textSecondary,
+  },
+  prayerText: { fontFamily: 'Brand_Italic', fontSize: 15, color: colors.text, lineHeight: 26 },
   
   modalBottomActions: { paddingTop: 20, alignItems: 'center' },
   modalShareButton: { flexDirection: 'row', backgroundColor: colors.ctaFill, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 24, alignItems: 'center', gap: 10 },

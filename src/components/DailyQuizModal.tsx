@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, SafeAreaView, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../providers/ThemeProvider';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../providers/AuthProvider';
+import { SafeModal } from './SafeModal';
 
 interface DailyQuizModalProps {
   visible: boolean;
@@ -74,114 +75,151 @@ export function DailyQuizModal({ visible, onClose }: DailyQuizModalProps) {
         return;
       }
 
-      // 2. Récupération des 2 questions bibliques générales depuis VOTRE table
-      const { data: dbQuestions } = await supabase.from('quiz_questions').select('*');
-      let generalQuestions = [];
-      
-      if (dbQuestions && dbQuestions.length >= 2) {
-        generalQuestions = dbQuestions
-          .sort(() => 0.5 - Math.random()) // Mélange aléatoire
-          .slice(0, 2) // On en garde seulement 2
-          .map(q => ({
-            question: q.question,
-            options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options,
-            correctAnswer: q.correct_answer,
-            explanation: q.explanation
-          }));
-      } else {
-        // Fallback si la table est vide
-        generalQuestions = [...FALLBACK_QUESTIONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+      // 2. Récupération des 2 questions bibliques générales depuis Supabase.
+      //    Le fallback n'est utilisé QUE si Supabase ne renvoie pas au moins 2 questions.
+      let dbQuestions: any[] = [];
+      try {
+        const { data, error: dbErr } = await supabase
+          .from('quiz_questions')
+          .select('*');
+        if (dbErr) throw dbErr;
+        dbQuestions = data ?? [];
+      } catch (e) {
+        console.warn('[DailyQuiz] quiz_questions fetch failed, will use fallback', e);
       }
 
-      // 3. Récupération du verset (Question 1) avec filet de sécurité
-      let historyData = null;
-      
-      // On tente de récupérer le verset d'hier
-      const { data: historyDataYesterday } = await supabase
-        .from('verse_history')
-        .select('*, verses(*)')
-        .eq('user_id', user.id)
-        .eq('viewed_on', yesterdayStr)
-        .single();
+      const generalQuestions: any[] = dbQuestions.length >= 2
+        ? dbQuestions
+            .sort(() => 0.5 - Math.random())
+            .slice(0, 2)
+            .map((q: any) => ({
+              question: q.question,
+              options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options,
+              correctAnswer: q.correct_answer,
+              explanation: q.explanation,
+            }))
+        : // Fallback: complète avec les questions en dur pour atteindre 2 questions
+          [...FALLBACK_QUESTIONS]
+            .sort(() => 0.5 - Math.random())
+            .slice(0, 2);
 
-      if (historyDataYesterday) {
-        historyData = historyDataYesterday;
-      } else {
-        // Si aucun verset lu hier, on récupère le tout dernier verset lu
-        const { data: lastViewed } = await supabase
+      // 3. Récupération du verset (Question 1) avec filet de sécurité
+      let historyData: any = null;
+      try {
+        const { data: historyDataYesterday } = await supabase
           .from('verse_history')
           .select('*, verses(*)')
           .eq('user_id', user.id)
-          .order('viewed_on', { ascending: false })
-          .limit(1)
+          .eq('viewed_on', yesterdayStr)
           .single();
-        historyData = lastViewed;
-      }
 
-      // Si l'utilisateur est totalement nouveau et n'a aucun historique, on prend un verset aléatoire
-      if (!historyData || !historyData.verses) {
-        const { data: randomVerse } = await supabase.from('verses').select('*').limit(1).single();
-        if (randomVerse) historyData = { verses: randomVerse };
+        if (historyDataYesterday) {
+          historyData = historyDataYesterday;
+        } else {
+          const { data: lastViewed } = await supabase
+            .from('verse_history')
+            .select('*, verses(*)')
+            .eq('user_id', user.id)
+            .order('viewed_on', { ascending: false })
+            .limit(1)
+            .single();
+          historyData = lastViewed;
+        }
+
+        if (!historyData || !historyData.verses) {
+          const { data: randomVerse } = await supabase
+            .from('verses')
+            .select('*')
+            .limit(1)
+            .single();
+          if (randomVerse) historyData = { verses: randomVerse };
+        }
+      } catch (e) {
+        console.warn('[DailyQuiz] verse_history fetch failed', e);
       }
 
       // 4. Construction de la Question 1 (Verset à trous)
-      let q1 = null;
+      let q1: any = null;
       if (historyData && historyData.verses) {
         const verse = historyData.verses;
-        const words = verse.text.split(' ');
-        
-        // Retirer 2 à 3 mots (sans toucher au tout premier ou dernier mot pour garder du sens)
-        const wordsToRemove = Math.min(3, Math.max(2, Math.floor(words.length / 4))); 
+        const words: string[] = (verse.text ?? '').split(' ');
+
+        const wordsToRemove = Math.min(3, Math.max(2, Math.floor(words.length / 4)));
         const maxStartIndex = Math.max(1, words.length - wordsToRemove - 1);
-        const startIndex = Math.min(Math.max(1, Math.floor(Math.random() * maxStartIndex)), words.length - wordsToRemove);
-        
-        const maskedText = words.map((w: string, i: number) => 
-          (i >= startIndex && i < startIndex + wordsToRemove) ? "_____" : w
-        ).join(' ');
+        const startIndex = Math.min(
+          Math.max(1, Math.floor(Math.random() * maxStartIndex)),
+          words.length - wordsToRemove
+        );
+
+        const maskedText = words
+          .map((w, i) => (i >= startIndex && i < startIndex + wordsToRemove ? '_____' : w))
+          .join(' ');
 
         const trueRef = `${verse.book} ${verse.chapter}:${verse.verse_number}`;
         const fakeRefs = [
-            `${verse.book} ${Number(verse.chapter) + 1}:2`, 
-            `Psaumes 23:1`, 
-            `Proverbes 3:5`, 
-            `Jean 3:16`, 
-            `Romains 8:28`
-        ].filter(r => r !== trueRef).sort(() => 0.5 - Math.random()).slice(0, 3);
+          `${verse.book} ${Number(verse.chapter) + 1}:2`,
+          'Psaumes 23:1',
+          'Proverbes 3:5',
+          'Jean 3:16',
+          'Romains 8:28',
+        ]
+          .filter((r) => r !== trueRef)
+          .sort(() => 0.5 - Math.random())
+          .slice(0, 3);
 
         q1 = {
-          question: "Devinez les mots manquants et choisissez la bonne référence :",
+          question: 'Devinez les mots manquants et choisissez la bonne référence :',
           textWithBlank: maskedText,
           options: [trueRef, ...fakeRefs].sort(() => 0.5 - Math.random()),
-          correctAnswer: trueRef
+          correctAnswer: trueRef,
         };
       }
 
-      // On assemble les 3 questions
-      setQuestions(q1 ? [q1, ...generalQuestions] : [...generalQuestions, FALLBACK_QUESTIONS[2]]);
-      
+      // On assemble les 3 questions — Supabase d'abord, fallback en dernier recours
+      const allQuestions = q1
+        ? [q1, ...generalQuestions]
+        : [...generalQuestions, FALLBACK_QUESTIONS[2]];
+
+      setQuestions(allQuestions);
     } catch (err) {
-      console.error(err);
+      // Filet de sécurité absolu : si TOUT a échoué, on a au moins 3 questions
+      // depuis le fallback pour ne pas bloquer l'utilisateur
+      console.error('[DailyQuiz] critical failure, using full fallback', err);
+      setQuestions(
+        [...FALLBACK_QUESTIONS]
+          .sort(() => 0.5 - Math.random())
+          .slice(0, 3)
+          .map((q) => ({
+            question: q.question,
+            options: q.options,
+            correctAnswer: q.correctAnswer,
+          }))
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const handleOptionSelect = (option: string) => {
-    if (isAnswering) return; 
+    if (isAnswering) return;
     setIsAnswering(true);
     setSelectedOption(option);
 
     const isCorrect = option === questions[step - 1].correctAnswer;
-    if (isCorrect) setScore(prev => prev + 1);
+    if (isCorrect) setScore((prev) => prev + 1);
 
     setTimeout(() => {
       if (step < 3) {
-        setStep(prev => prev + 1);
+        setStep((prev) => prev + 1);
       } else {
-        const finalScore = score + (isCorrect ? 1 : 0);
-        setStep(4); 
-        setTodayScore(finalScore);
-        saveResults(finalScore);
+        // Recalcule le score final à partir de l'état courant (closure fiable)
+        setScore((currentScore) => {
+          const finalScore = currentScore + (isCorrect ? 1 : 0);
+          setStep(4);
+          setTodayScore(finalScore);
+          saveResults(finalScore);
+          return currentScore;
+        });
       }
       setSelectedOption(null);
       setIsAnswering(false);
@@ -204,21 +242,20 @@ export function DailyQuizModal({ visible, onClose }: DailyQuizModalProps) {
 
   const getOptionStyle = (opt: string, correctAnswer: string) => {
     if (!isAnswering) return { backgroundColor: colors.surfaceBase, borderColor: colors.border, textColor: colors.text };
-    if (opt === correctAnswer) return { backgroundColor: colors.success || '#4CAF50', borderColor: colors.success || '#4CAF50', textColor: '#FFFFFF' };
+    if (opt === correctAnswer) return { backgroundColor: colors.accent, borderColor: colors.accent, textColor: colors.ctaText };
     if (opt === selectedOption && opt !== correctAnswer) return { backgroundColor: colors.error || '#EF5350', borderColor: colors.error || '#EF5350', textColor: '#FFFFFF' };
     return { backgroundColor: colors.surfaceBase, borderColor: colors.border, textColor: colors.text };
   };
 
   return (
-    <Modal animationType="slide" transparent={true} visible={visible} onRequestClose={onClose}>
-      <SafeAreaView style={styles.overlay}>
-        <View style={styles.card}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Défi Quotidien</Text>
-            <Pressable onPress={onClose} style={styles.closeButton} disabled={isAnswering && step < 4 && !hasPlayedToday}>
-              <Feather name="x" size={20} color={colors.text} />
-            </Pressable>
-          </View>
+    <SafeModal visible={visible} onClose={onClose} position="bottom" backdropDismissible={!isAnswering || step >= 4 || hasPlayedToday}>
+      <View style={styles.card}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Défi Quotidien</Text>
+          <Pressable onPress={onClose} style={styles.closeButton} disabled={isAnswering && step < 4 && !hasPlayedToday}>
+            <Feather name="x" size={20} color={colors.text} />
+          </Pressable>
+        </View>
 
           {loading ? (
             <ActivityIndicator color={colors.accent} size="large" style={{ marginTop: 50 }} />
@@ -273,13 +310,11 @@ export function DailyQuizModal({ visible, onClose }: DailyQuizModalProps) {
             </View>
           )}
         </View>
-      </SafeAreaView>
-    </Modal>
+    </SafeModal>
   );
 }
 
 const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: colors.backdrop, justifyContent: 'flex-end' },
   card: { backgroundColor: colors.primary, borderTopLeftRadius: 32, borderTopRightRadius: 32, minHeight: '75%', padding: 24, paddingBottom: 40 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   title: { fontFamily: 'Brand_Heading', fontSize: 24, color: colors.text },

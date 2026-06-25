@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter, useNavigation, useFocusEffect } from 'expo-router';
-import { Audio } from 'expo-av';
+// ✅ NOUVEAU : Remplacement de expo-av par expo-audio
+import { createAudioPlayer, setAudioModeAsync, AudioPlayer, InterruptionModeAndroid } from 'expo-audio';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import { MotiView, AnimatePresence } from 'moti';
-// CORRECTION ICI : Ajout de withSequence et withDelay
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, withSequence, withDelay } from 'react-native-reanimated';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withRepeat, 
+  withTiming, 
+  Easing, 
+  withSequence, 
+  withDelay 
+} from 'react-native-reanimated';
 
 import { useTheme } from '../../providers/ThemeProvider';
 import i18n from '../../lib/i18n';
@@ -96,10 +104,52 @@ export default function MeditateScreen() {
     const [selectedDuration, setSelectedDuration] = useState(0);
     const [selectedTrack, setSelectedTrack] = useState<typeof TRACKS[0] | null>(null);
     const [timeLeft, setTimeLeft] = useState(0);
-    const [sound, setSound] = useState<Audio.Sound | null>(null);
 
-    const soundRef = useRef<Audio.Sound | null>(null);
+    // ✅ NOUVEAU : On utilise useRef au lieu de useState pour le player
+    // (Le player n'a pas besoin de déclencher de re-render, et useRef garantit la persistance)
+    const playerRef = useRef<AudioPlayer | null>(null);
     const timerRef = useRef<any>(null);
+    
+    // ✅ NOUVEAU : Ref pour s'assurer que l'audio mode n'est configuré qu'une fois
+    const audioModeConfigured = useRef(false);
+
+    // ✅ NOUVEAU : Configuration de l'audio mode (équivalent de Audio.setAudioModeAsync)
+    const configureAudioMode = async () => {
+        if (audioModeConfigured.current) return;
+        try {
+            await setAudioModeAsync({
+                playsInSilentMode: true,        // iOS : joue en silencieux
+                shouldPlayInBackground: true,   // Les deux : continue en background
+            });
+            audioModeConfigured.current = true;
+        } catch (e) {
+            console.error("Failed to set audio mode", e);
+        }
+    };
+
+
+
+
+
+    // ✅ NOUVEAU : Nettoyage complet au démontage du composant
+    // (Important avec createAudioPlayer car il n'est pas auto-nettoyé comme useAudioPlayer)
+    useEffect(() => {
+        return () => {
+            if (playerRef.current) {
+                try {
+                    playerRef.current.pause();
+                    playerRef.current.release();
+                } catch (e) {
+                    console.warn("Player cleanup error:", e);
+                }
+                playerRef.current = null;
+            }
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
+        };
+    }, []);
 
     useEffect(() => {
         const loadContent = async () => {
@@ -122,16 +172,24 @@ export default function MeditateScreen() {
         loadContent();
     }, []);
 
+    // ✅ CORRIGÉ : Nettoyage quand l'écran perd le focus (changement d'onglet par exemple)
     useFocusEffect(
         useCallback(() => {
             return () => {
-                if (soundRef.current) {
-                    soundRef.current.stopAsync();
-                    soundRef.current.unloadAsync();
-                    soundRef.current = null;
-                    setSound(null);
+                if (timerRef.current) {
+                    clearInterval(timerRef.current);
+                    timerRef.current = null;
                 }
-                if (timerRef.current) clearInterval(timerRef.current);
+                // ✅ NOUVEAU : Pause et release du player au lieu de stopAsync/unloadAsync
+                if (playerRef.current) {
+                    try {
+                        playerRef.current.pause();
+                        playerRef.current.release();
+                    } catch (e) {
+                        console.warn("Focus cleanup audio error:", e);
+                    }
+                    playerRef.current = null;
+                }
             };
         }, [])
     );
@@ -158,7 +216,6 @@ export default function MeditateScreen() {
             }, 1000);
         } else if (timeLeft === 0 && step === 'active') {
             handleStop();
-            // NOUVELLE ALERTE REDIRIGEANT VERS LE CARNET
             Alert.alert(
                 "Session terminée", 
                 "Votre esprit est apaisé. Souhaitez-vous noter vos pensées ou révélations ?",
@@ -173,22 +230,37 @@ export default function MeditateScreen() {
         };
     }, [step, timeLeft]);
 
+    // ✅ COMPLÈTEMENT RÉÉCRIT : Nouvelle API expo-audio
     const playSound = async (trackFile: any) => {
         try {
-            if (soundRef.current) await soundRef.current.unloadAsync();
-            await Audio.setAudioModeAsync({
-                playsInSilentModeIOS: true,
-                staysActiveInBackground: true,
-                shouldDuckAndroid: true,
-            });
-
-            const { sound: newSound } = await Audio.Sound.createAsync(
-                trackFile, { shouldPlay: true, isLooping: true, volume: 0.5 }
-            );
+            // 1. S'assurer que l'audio mode est configuré
+            await configureAudioMode();
             
-            soundRef.current = newSound; 
-            setSound(newSound); 
+            // 2. Nettoyer l'ancien player s'il existe
+            if (playerRef.current) {
+                try {
+                    playerRef.current.pause();
+                    playerRef.current.release();
+                } catch (e) {
+                    console.warn("Previous player cleanup error:", e);
+                }
+                playerRef.current = null;
+            }
+
+            // 3. Créer le nouveau player (équivalent de Audio.Sound.createAsync)
+            const player = createAudioPlayer(trackFile);
+            
+            // 4. Configurer les propriétés (équivalent de isLooping: true, volume: 0.5)
+            player.loop = true;
+            player.volume = 0.5;
+            
+            // 5. Lancer la lecture (équivalent de shouldPlay: true)
+            player.play();
+            
+            // 6. Stocker la référence
+            playerRef.current = player;
         } catch (error) {
+            console.error("Audio playback error:", error);
             Alert.alert("Erreur Audio", "Impossible de jouer le son.");
         }
     };
@@ -206,18 +278,25 @@ export default function MeditateScreen() {
         trackEvent('meditation_start', { track: track.title, duration: selectedDuration });
     };
 
+    // ✅ RÉÉCRIT : Utilise pause() et release() au lieu de stopAsync/unloadAsync
     const handleStop = async () => {
         if (timeLeft === 0) trackEvent('meditation_complete', { duration: selectedDuration });
 
         setStep('duration'); 
         setSelectedTrack(null);
-        if (timerRef.current) clearInterval(timerRef.current);
+        if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+        }
         
-        if (soundRef.current) {
-            await soundRef.current.stopAsync();
-            await soundRef.current.unloadAsync();
-            soundRef.current = null;
-            setSound(null);
+        if (playerRef.current) {
+            try {
+                playerRef.current.pause();
+                playerRef.current.release();
+            } catch (e) {
+                console.warn("Stop audio error:", e);
+            }
+            playerRef.current = null;
         }
     };
 
@@ -243,7 +322,7 @@ export default function MeditateScreen() {
                 </View>
             )}
 
-            <AnimatePresence mode='wait'>
+            <AnimatePresence {...({ mode: 'wait' } as any)}>
                 {step === 'duration' && (
                     <MotiView 
                         key="step1"
@@ -468,7 +547,7 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     trackAuthor: { fontFamily: 'Brand_Body', fontSize: 13, color: colors.textSecondary },
 
     activeContainer: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: colors.primary, 
         justifyContent: 'space-between', 
         paddingBottom: 60,

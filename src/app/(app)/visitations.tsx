@@ -111,7 +111,7 @@ export default function VisitationsScreen() {
                   
                   <View style={styles.instructionContainer}>
                     <Text style={styles.modalInstruction}>
-                      <Text style={{fontFamily: 'Brand_Body_Bold', color: '#FFB23F'}}>Instruction : </Text>
+                      <Text style={{fontFamily: 'Brand_Body_Bold', color: colors.accentWarm}}>Instruction : </Text>
                       {selectedVisitation?.details.instruction}
                     </Text>
                   </View>
@@ -155,13 +155,13 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   itemLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   emoji: { fontSize: 22 },
   itemTitle: { fontFamily: 'Brand_Heading', color: colors.text, fontSize: 18, marginBottom: 4 },
-  itemTime: { fontFamily: 'Brand_Body_Bold', color: colors.zenSage, fontSize: 13, letterSpacing: 1 },
+  itemTime: { fontFamily: 'Brand_Body_Bold', color: colors.accent, fontSize: 13, letterSpacing: 1 },
   
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.backdrop, padding: 20 },
   modalContent: {
     width: '100%',
     maxHeight: '85%',
-    backgroundColor: isDark ? colors.zenSage : colors.surface, 
+    backgroundColor: isDark ? colors.surface : colors.surface,
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
@@ -171,16 +171,16 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   modalDescription: { fontFamily: 'Brand_Body', fontSize: 15, color: isDark ? '#E3E3E3' : colors.text, lineHeight: 26, marginBottom: 20 },
   
   instructionContainer: {
-    backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255, 178, 63, 0.1)',
+    backgroundColor: isDark ? 'rgba(240, 176, 48, 0.08)' : 'rgba(240, 168, 104, 0.1)',
     borderRadius: 12,
     padding: 20,
     marginBottom: 24,
     borderLeftWidth: 4,
-    borderLeftColor: '#FFB23F', 
+    borderLeftColor: colors.accent,
   },
   modalInstruction: { fontFamily: 'Brand_Italic', fontSize: 15, color: colors.text, lineHeight: 24 },
-  modalVerse: { fontFamily: 'Brand_Heading', fontSize: 16, color: isDark ? '#A5D6A7' : colors.textSecondary, textAlign: 'center', marginBottom: 30, fontStyle: 'italic', lineHeight: 26 },
+  modalVerse: { fontFamily: 'Brand_Heading', fontSize: 16, color: colors.textSecondary, textAlign: 'center', marginBottom: 30, fontStyle: 'italic', lineHeight: 26 },
   
-  closeButton: { backgroundColor: colors.zenSage, paddingVertical: 14, borderRadius: 24, alignItems: 'center' },
-  closeButtonText: { fontFamily: 'Brand_Body_Bold', color: '#111827', fontSize: 15 },
+  closeButton: { backgroundColor: colors.ctaFill, paddingVertical: 14, borderRadius: 24, alignItems: 'center' },
+  closeButtonText: { fontFamily: 'Brand_Body_Bold', color: colors.ctaText, fontSize: 15 },
 });

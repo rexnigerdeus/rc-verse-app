@@ -40,6 +40,8 @@ export interface StreakState {
   error: string | null;
   /** Premier chargement en cours */
   loading: boolean;
+  /** Palier qui vient d'être franchi (à consommer une fois) */
+  newMilestone: import('./badges').Milestone | null;
 }
 
 /** Constante partagée : 2 minutes en millisecondes */

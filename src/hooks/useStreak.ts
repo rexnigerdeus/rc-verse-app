@@ -22,6 +22,7 @@ import {
   StreakState,
   UserStreak,
 } from '../types/streak';
+import { MILESTONES, Milestone } from '../types/badges';
 import { useAuth } from '../providers/AuthProvider';
 
 const STORAGE_KEY = 'revival_user_streak_v1';
@@ -114,6 +115,7 @@ export function useStreak() {
   const [streak, setStreak] = useState<UserStreak | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [newMilestone, setNewMilestone] = useState<Milestone | null>(null);
 
   // --- Mesure de session (foreground / onglet visible) --------------------
   const sessionStartRef = useRef<number | null>(null);
@@ -225,6 +227,12 @@ export function useStreak() {
     setStreak(updated);
     await cacheSet(updated);
     lastSyncRef.current = today;
+
+    // Détection d'un palier fraîchement franchi
+    const reached = MILESTONES.find(
+      (m) => m.days === newCount && (streak.longest_streak ?? 0) < newCount
+    );
+    if (reached) setNewMilestone(reached);
 
     // Sync serveur (best effort)
     try {
@@ -351,7 +359,11 @@ export function useStreak() {
     qualifiedThisSession,
     error,
     loading,
+    newMilestone,
   };
 
-  return { ...state, refetch: () => {/* re-render via state */} };
+  return {
+    ...state,
+    dismissMilestone: () => setNewMilestone(null),
+  };
 }

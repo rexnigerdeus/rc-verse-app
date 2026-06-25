@@ -26,6 +26,8 @@ import { ScreenWrapper } from "../../components/ScreenWrapper";
 import { DailyQuizModal } from "../../components/DailyQuizModal";
 import { FlameBadge } from "../../components/FlameBadge";
 import { StreakModal } from "../../components/StreakModal";
+import { BadgeUnlockModal } from "../../components/BadgeUnlockModal";
+import { useStreak } from "../../hooks/useStreak";
 
 type Verse = Database["public"]["Tables"]["verses"]["Row"] & {
   explanation?: string;
@@ -77,6 +79,7 @@ export default function HomeScreen() {
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors, isDark);
   const router = useRouter();
+  const streak = useStreak();
 
   const getTodayDateString = () => {
     const date = new Date();
@@ -485,6 +488,10 @@ export default function HomeScreen() {
 
         <DailyQuizModal visible={quizVisible} onClose={() => setQuizVisible(false)} />
         <StreakModal visible={streakVisible} onClose={() => setStreakVisible(false)} />
+        <BadgeUnlockModal
+          milestone={streak.newMilestone}
+          onClose={() => streak.dismissMilestone()}
+        />
 
       </KeyboardAvoidingView>
     </ScreenWrapper>

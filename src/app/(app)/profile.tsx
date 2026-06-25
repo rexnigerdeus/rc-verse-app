@@ -9,6 +9,8 @@ import { useTheme } from '../../providers/ThemeProvider';
 import { useStreak } from '../../hooks/useStreak';
 import { FlameIcon } from '../../components/FlameIcon';
 import { StreakModal } from '../../components/StreakModal';
+import { BadgeIcon } from '../../components/BadgeIcon';
+import { getMilestoneStatus, getDaysToNextMilestone, getCurrentMilestone, getNextMilestone } from '../../types/badges';
 
 export default function ProfileScreen() {
   const { session, signOut } = useAuth();
@@ -197,6 +199,28 @@ export default function ProfileScreen() {
           </Pressable>
 
           <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Mes paliers 🔥</Text>
+            <Text style={styles.badgesHint}>
+              {(() => {
+                const next = getNextMilestone(streak.count);
+                if (!next) return 'Tu as débloqué tous les paliers. Tu es une légende 🌈';
+                const remaining = getDaysToNextMilestone(streak.count);
+                return `Plus que ${remaining} jour${remaining > 1 ? 's' : ''} avant le prochain palier (${next.symbol} ${next.days}j)`;
+              })()}
+            </Text>
+            <View style={styles.badgesGrid}>
+              {getMilestoneStatus(streak.count).map((m) => (
+                <View key={m.id} style={styles.badgeCell}>
+                  <BadgeIcon milestone={m} size={56} reached={m.reached} pulse={m.reached && m.id === getCurrentMilestone(streak.count)?.id} />
+                  <Text style={[styles.badgeDays, { color: m.reached ? colors.text : colors.textTertiary }]}>
+                    {m.days}j
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>Apparence</Text>
             <View style={styles.themeToggleRow}>
               <View style={styles.themeToggleLabel}>
@@ -317,6 +341,29 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+
+  badgesHint: {
+    fontFamily: 'Brand_Body',
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 14,
+  },
+  badgesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 14,
+  },
+  badgeCell: {
+    alignItems: 'center',
+    width: '22%',
+  },
+  badgeDays: {
+    fontFamily: 'Brand_Body_Bold',
+    fontSize: 11,
+    marginTop: 6,
+    letterSpacing: 0.3,
   },
 
   section: { backgroundColor: colors.surfaceBase, padding: 20, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: colors.border },

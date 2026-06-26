@@ -7,6 +7,7 @@ import { ActivityIndicator, View, Platform } from "react-native";
 import { useTheme } from "../../providers/ThemeProvider"; 
 import { useNotifications } from "../../hooks/useNotifications";
 import { useStreakNotifications } from "../../hooks/useStreakNotifications";
+import { useSyncQueue } from "../../hooks/useSyncQueue";
 import i18n from "../../lib/i18n";
 import { useAuth } from "../../providers/AuthProvider";
 
@@ -21,6 +22,8 @@ export default function AppLayout() {
   useNotifications();
   useStreakNotifications();
   const { session, loading } = useAuth();
+  // Sync queue globale : drain la file dès qu'on a un user connecté.
+  useSyncQueue({ userId: session?.user?.id });
   
   const { colors, isDark } = useTheme(); 
 

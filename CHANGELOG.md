@@ -1,5 +1,32 @@
 # CHANGELOG — Revival : Mon Quotidien
 
+## [2.1.0] — 2026-01-XX
+
+### 📴 Offline-first
+
+L'app fonctionne désormais **sans connexion internet** pour les fonctionnalités essentielles. Tu peux prier, méditer, lire la Bible et noter tes pensées même en avion ou dans une zone sans réseau.
+
+#### Nouveautés
+- **Bible offline** : les versions LSG1910 et Darby FR sont embarquées dans l'app (16 MB). Lecture immédiate, sans réseau.
+- **Carnet offline** : écris tes notes en hors-ligne, elles se synchronisent automatiquement à la reconnexion.
+- **Prières offline** : soumets et marque tes sujets comme exaucés sans réseau.
+- **Streak offline** : ta flamme est mise à jour localement puis synchronisée au retour de la connexion.
+- **Bannière offline** discrète (ambre) en haut de l'écran quand le réseau est coupé.
+- **Indicateur de sync** dans le Carnet et les Prières : badge avec compteur d'éléments en attente.
+
+#### Technique
+- Nouvelle base SQLite locale (`offline_data.db`) avec queue de synchronisation
+- Hook `useSyncQueue` : sync automatique à la reconnexion + polling de sécurité 60s
+- Hook `useNetworkStatus` : détection online/offline multi-plateforme (expo-network + navigator.onLine)
+- `OfflineBanner` : slide-down animé, fond ambre rassurant
+- `SyncIndicator` : pill discrète avec compteur pending + icône cloud
+
+### 🐛 Corrections
+- Schéma SQLite aligné sur le nom de colonne existant côté Supabase (`request_text`)
+- Optimisation de la sync queue (idempotente, transactions atomiques)
+
+---
+
 ## [2.0.0] — 2026-01-XX
 
 ### 🎉 Nouveautés majeures

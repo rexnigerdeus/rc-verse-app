@@ -8,6 +8,16 @@ import { useTheme } from '../../providers/ThemeProvider';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../providers/AuthProvider';
+import { OfflineBanner } from '../../components/OfflineBanner';
+import { SyncIndicator } from '../../components/SyncIndicator';
+import { useSyncQueue } from '../../hooks/useSyncQueue';
+import {
+  getJournal,
+  replaceJournal,
+  createJournalEntry,
+  LocalJournalEntry,
+} from '../../lib/offlineDb';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 
 const TAGS = [
   { id: 'note', label: 'Note', emoji: '📝' },
@@ -28,52 +38,80 @@ export default function JournalScreen() {
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors, isDark);
+  const { isConnected } = useNetworkStatus();
 
-  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [entries, setEntries] = useState<LocalJournalEntry[]>([]);
   const [newEntry, setNewEntry] = useState('');
   const [selectedTag, setSelectedTag] = useState(TAGS[0].id);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const fetchEntries = async () => {
-    if (!user) return;
-    try {
-      const { data, error } = await supabase
-        .from('journal_entries')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+  const sync = useSyncQueue({ userId: user?.id });
 
-      if (!error && data) setEntries(data);
+  /**
+   * Charge les entrées : 1) cache local instantané, 2) sync serveur en tâche de fond.
+   * C'est le pattern offline-first : l'utilisateur voit toujours quelque chose.
+   */
+  const fetchEntries = useCallback(async () => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      // 1) Lecture locale instantanée
+      const local = await getJournal(user.id);
+      setEntries(local);
+      setIsLoading(false);
+
+      // 2) Sync depuis serveur (seulement si online)
+      if (isConnected) {
+        const { data, error } = await supabase
+          .from('journal_entries')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          await replaceJournal(
+            user.id,
+            data.map((d) => ({
+              server_id: d.id,
+              user_id: d.user_id,
+              content: d.content,
+              tag: d.tag,
+              created_at: d.created_at,
+            }))
+          );
+          // Recharge depuis le local maintenant à jour
+          const refreshed = await getJournal(user.id);
+          setEntries(refreshed);
+        }
+      }
     } catch (e) {
       console.error(e);
-    } finally {
       setIsLoading(false);
     }
-  };
+  }, [user, isConnected]);
 
   useFocusEffect(
     useCallback(() => {
       fetchEntries();
-    }, [user])
+    }, [fetchEntries])
   );
 
   const handleSave = async () => {
     if (!newEntry.trim() || !user) return;
     setIsSaving(true);
-    
-    try {
-      const { error } = await supabase
-        .from('journal_entries')
-        .insert({
-          user_id: user.id,
-          content: newEntry.trim(),
-          tag: selectedTag,
-        });
 
-      if (!error) {
-        setNewEntry('');
-        await fetchEntries(); // Rafraîchit la liste
+    try {
+      // 1) Toujours écrire en local d'abord (UX instantanée, marche offline)
+      await createJournalEntry(user.id, newEntry.trim(), selectedTag);
+      setNewEntry('');
+      // Refresh local immédiat
+      const local = await getJournal(user.id);
+      setEntries(local);
+
+      // 2) Si online, déclencher la sync
+      if (isConnected) {
+        sync.flush();
       }
     } catch (error) {
       console.error("Erreur lors de la sauvegarde", error);
@@ -82,13 +120,14 @@ export default function JournalScreen() {
     }
   };
 
-  const renderEntry = ({ item, index }: { item: JournalEntry, index: number }) => {
+  const renderEntry = ({ item, index }: { item: LocalJournalEntry, index: number }) => {
     const tagInfo = TAGS.find(t => t.id === item.tag) || TAGS[0];
     const date = new Date(item.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
     const time = new Date(item.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const isPending = item._sync_status === 'pending_create';
 
     return (
-      <MotiView 
+      <MotiView
         from={{ opacity: 0, translateY: 10 }}
         animate={{ opacity: 1, translateY: 0 }}
         transition={{ delay: index * 100, type: 'timing', duration: 400 }}
@@ -99,7 +138,12 @@ export default function JournalScreen() {
             <Text style={styles.entryTagEmoji}>{tagInfo.emoji}</Text>
             <Text style={styles.entryTagLabel}>{tagInfo.label}</Text>
           </View>
-          <Text style={styles.entryDate}>{date} à {time}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {isPending && (
+              <Feather name="cloud-off" size={11} color={colors.textTertiary} />
+            )}
+            <Text style={styles.entryDate}>{date} à {time}</Text>
+          </View>
         </View>
         <Text style={styles.entryContent}>"{item.content}"</Text>
       </MotiView>
@@ -108,11 +152,15 @@ export default function JournalScreen() {
 
   return (
     <ScreenWrapper style={{ backgroundColor: colors.primary }}>
+      <OfflineBanner />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <View style={styles.container}>
-          
+
           <View style={styles.header}>
-            <Text style={styles.title}>Carnet Intime</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Text style={styles.title}>Carnet Intime</Text>
+              <SyncIndicator userId={user?.id} />
+            </View>
             <Text style={styles.subtitle}>Votre espace de réflexion spirituelle</Text>
           </View>
 

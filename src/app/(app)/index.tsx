@@ -27,6 +27,7 @@ import { DailyQuizModal } from "../../components/DailyQuizModal";
 import { FlameBadge } from "../../components/FlameBadge";
 import { StreakModal } from "../../components/StreakModal";
 import { BadgeUnlockModal } from "../../components/BadgeUnlockModal";
+import { OfflineBanner } from "../../components/OfflineBanner";
 import { useStreak } from "../../hooks/useStreak";
 
 type Verse = Database["public"]["Tables"]["verses"]["Row"] & {
@@ -362,6 +363,7 @@ export default function HomeScreen() {
 
   return (
     <ScreenWrapper style={{ backgroundColor: colors.primary }}>
+      <OfflineBanner />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.contentWrapper} showsVerticalScrollIndicator={false}>
           

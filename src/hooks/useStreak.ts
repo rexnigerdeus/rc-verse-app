@@ -24,6 +24,7 @@ import {
 } from '../types/streak';
 import { MILESTONES, Milestone } from '../types/badges';
 import { useAuth } from '../providers/AuthProvider';
+import { useNetworkStatus } from './useNetworkStatus';
 
 const STORAGE_KEY = 'revival_user_streak_v1';
 
@@ -111,6 +112,7 @@ function deriveState(streak: UserStreak | null): {
 export function useStreak() {
   const { user } = useAuth();
   const userId = user?.id ?? null;
+  const { isConnected, wasOffline } = useNetworkStatus();
 
   const [streak, setStreak] = useState<UserStreak | null>(null);
   const [loading, setLoading] = useState(true);
@@ -335,6 +337,33 @@ export function useStreak() {
       if (tickRef.current) clearInterval(tickRef.current);
     };
   }, [userId, validateTodayFlame]);
+
+  /* ---------- Sync à la reconnexion réseau ---------------------------- */
+  useEffect(() => {
+    // Si on était offline et qu'on est de nouveau online,
+    // on push le cache local vers Supabase.
+    if (!isConnected || !wasOffline || !userId || !streak) return;
+
+    const syncToServer = async () => {
+      try {
+        await supabase
+          .from('user_streaks')
+          .upsert({
+            user_id: userId,
+            current_streak: streak.current_streak,
+            longest_streak: streak.longest_streak,
+            total_flames: streak.total_flames,
+            last_visit_date: streak.last_visit_date,
+            last_session_at: streak.last_session_at,
+          });
+        console.log('[streak] synced to server after reconnect');
+      } catch (e) {
+        console.warn('[streak] resync failed', e);
+      }
+    };
+
+    syncToServer();
+  }, [isConnected, wasOffline, userId, streak]);
 
   /* ---------- Quand l'app rouvre après plusieurs jours ----------------- */
   useEffect(() => {

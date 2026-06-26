@@ -11,6 +11,7 @@ import { FlameIcon } from '../../components/FlameIcon';
 import { StreakModal } from '../../components/StreakModal';
 import { BadgeIcon } from '../../components/BadgeIcon';
 import { getMilestoneStatus, getDaysToNextMilestone, getCurrentMilestone, getNextMilestone } from '../../types/badges';
+import { OfflineBanner } from '../../components/OfflineBanner';
 
 export default function ProfileScreen() {
   const { session, signOut } = useAuth();
@@ -125,6 +126,7 @@ export default function ProfileScreen() {
 
   return (
     <ScreenWrapper style={{ backgroundColor: colors.primary }}>
+      <OfflineBanner />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           

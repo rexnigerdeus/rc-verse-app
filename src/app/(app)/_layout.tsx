@@ -44,8 +44,8 @@ export default function AppLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)', 
+        tabBarActiveTintColor: String(colors.accent),
+        tabBarInactiveTintColor: isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)',
         tabBarStyle: { 
           backgroundColor: colors.primary, 
           borderTopColor: colors.border,

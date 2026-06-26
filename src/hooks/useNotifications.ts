@@ -9,6 +9,8 @@ import i18n from "../lib/i18n";
 // 1. Configure the Handler (How notifications look when app is open)
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,

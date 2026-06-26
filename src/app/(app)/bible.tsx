@@ -3,6 +3,9 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, Modal, 
 import { Feather } from '@expo/vector-icons';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { useTheme } from '../../providers/ThemeProvider';
+import { getChapterLocal, isVersionLocal } from '../../lib/bibleDb';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
+import { OfflineBanner } from '../../components/OfflineBanner';
 
 // --- CONSTANTS ---
 const BIBLE_VERSIONS = [
@@ -72,21 +75,48 @@ export default function BibleScreen() {
     const { colors } = useTheme();
     // 2. Génération des styles
     const styles = createStyles(colors);
+    const { isConnected } = useNetworkStatus();
 
     // --- FETCH DATA ---
     const fetchChapter = useCallback(async () => {
         setIsLoading(true);
         setError(false);
-        try {
-            // L'URL s'adapte maintenant à la version choisie !
-            const apiUrl = `https://bolls.life/get-chapter/${selectedVersion.id}/${selectedBook.number}/${selectedChapter}/`;
 
+        try {
+            // 1) TENTATIVE LOCALE en priorité (rapide, offline-friendly)
+            //    Toutes les versions ne sont pas dispo en local — on n'utilise
+            //    la base SQLite que si elle couvre la version demandée.
+            if (isVersionLocal(selectedVersion.id)) {
+                try {
+                    const localVerses = await getChapterLocal(
+                        selectedVersion.id,
+                        selectedBook.number,
+                        selectedChapter
+                    );
+                    if (localVerses && localVerses.length > 0) {
+                        setVerses(localVerses);
+                        setIsLoading(false);
+                        return;
+                    }
+                    // Si la base n'a rien → fallback réseau ci-dessous
+                } catch (localErr) {
+                    console.warn('[bible] local fetch failed, falling back to network', localErr);
+                }
+            }
+
+            // 2) FALLBACK RÉSEAU (bolls.life)
+            //    Seulement si on est en ligne ET que la version n'est pas en local.
+            if (!isConnected) {
+                throw new Error('Hors ligne et version indisponible en local.');
+            }
+
+            const apiUrl = `https://bolls.life/get-chapter/${selectedVersion.id}/${selectedBook.number}/${selectedChapter}/`;
             const response = await fetch(apiUrl);
-            
+
             if (!response.ok) throw new Error("Erreur réseau");
-            
+
             const data = await response.json();
-            
+
             if (Array.isArray(data) && data.length > 0) {
                  const cleanedVerses = data.map((v: any) => ({
                      verse: v.verse,
@@ -102,7 +132,7 @@ export default function BibleScreen() {
         } finally {
             setIsLoading(false);
         }
-    }, [selectedBook, selectedChapter, selectedVersion]); // NOUVEAU: selectedVersion ajouté ici
+    }, [selectedBook, selectedChapter, selectedVersion, isConnected]);
 
     useEffect(() => {
         fetchChapter();
@@ -148,6 +178,8 @@ export default function BibleScreen() {
     // --- RENDER ---
     return (
         <ScreenWrapper>
+            {/* Bannière discrète quand offline */}
+            <OfflineBanner message="Hors ligne — Bible disponible pour les versions locales" />
             {/* EN-TÊTE SÉPARÉ */}
             <View style={styles.header}>
                 <View style={styles.headerSelector}>

@@ -6,16 +6,28 @@ import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import i18n from "../lib/i18n";
 
-// 1. Configure the Handler (How notifications look when app is open)
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+// ⚠️ NE PAS appeler de modules natifs au niveau module !
+// setNotificationHandler est déplacé dans le useEffect pour éviter
+// un crash natif si le module n'est pas encore initialisé au boot.
+let notificationHandlerConfigured = false;
+
+function configureNotificationHandler() {
+  if (notificationHandlerConfigured) return;
+  notificationHandlerConfigured = true;
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+  } catch (e) {
+    console.warn("[Notifications] setNotificationHandler failed:", e);
+  }
+}
 
 // 2. Define your times clearly
 const SCHEDULED_TIMES = [
@@ -110,8 +122,13 @@ export const useNotifications = () => {
         
         isSetup.current = true; // Mark as running
 
+        // Configure handler safely inside useEffect (not at module level)
+        configureNotificationHandler();
+
         registerForPushNotificationsAsync().then(() => {
             scheduleVisitationNotifications();
+        }).catch((e) => {
+            console.warn("[Notifications] setup failed:", e);
         });
 
     }, []);

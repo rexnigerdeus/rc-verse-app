@@ -54,17 +54,25 @@ export function useNetworkStatus(): NetworkStatus {
     // Mobile : expo-network
     const checkInitial = async () => {
       try {
+        // Garde-fou : si expo-network n'est pas disponible (rare crash natif),
+        // on reste sur l'état par défaut (online).
+        if (typeof Network?.getNetworkStateAsync !== 'function') {
+          applyState(true);
+          return;
+        }
         const state = await Network.getNetworkStateAsync();
-        applyState(!!state.isConnected && state.isInternetReachable !== false);
-      } catch {
-        applyState(true); // En cas d'erreur API, on suppose online
+        applyState(!!state?.isConnected && state?.isInternetReachable !== false);
+      } catch (e) {
+        // On ne crash JAMAIS l'app si expo-network plante
+        console.warn('[useNetworkStatus] getNetworkStateAsync failed', e);
+        applyState(true);
       }
     };
     checkInitial();
 
-    // Poll toutes les 10s — expo-network n'expose pas de subscription,
-    // mais c'est léger et suffisant pour la fiabilité offline.
-    const interval = setInterval(checkInitial, 10_000);
+    // Poll toutes les 30s — moins fréquent que 10s pour réduire le risque de
+    // conflit avec d'autres listeners natifs sur iOS.
+    const interval = setInterval(checkInitial, 30_000);
 
     return () => {
       cancelled = true;

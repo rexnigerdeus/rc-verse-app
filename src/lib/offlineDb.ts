@@ -8,6 +8,10 @@
 //   3. Marquer chaque ligne avec _sync_status pour savoir ce qui doit partir
 //
 // Schéma aligné sur Supabase pour simplifier la synchro.
+//
+// ⚠️ SÉCURITÉ : ce module est wrappé dans un try/catch global. Si le module
+// natif expo-sqlite n'est pas lié (build natif incomplet), toutes les fonctions
+// retournent un fallback vide au lieu de crasher l'app.
 
 import * as SQLite from 'expo-sqlite';
 
@@ -15,17 +19,25 @@ const DB_NAME = 'offline_data.db';
 
 export type SyncStatus = 'synced' | 'pending_create' | 'pending_update' | 'pending_delete';
 
-let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+let dbPromise: Promise<any> | null = null;
+let moduleAvailable = true; // devient false si l'init échoue
 
 /**
  * Ouvre la base et applique le schéma. Idempotent.
+ * Renvoie null si le module natif n'est pas dispo (fallback silencieux).
  */
-async function getDb(): Promise<SQLite.SQLiteDatabase> {
+async function getDb(): Promise<any> {
+  if (!moduleAvailable) return null;
   if (dbPromise) return dbPromise;
   dbPromise = (async () => {
-    const db = await SQLite.openDatabaseAsync(DB_NAME);
-    await db.execAsync(`
-      PRAGMA journal_mode = WAL;
+    try {
+      if (typeof SQLite?.openDatabaseAsync !== 'function') {
+        moduleAvailable = false;
+        return null;
+      }
+      const db = await SQLite.openDatabaseAsync(DB_NAME);
+      await db.execAsync(`
+        PRAGMA journal_mode = WAL;
 
       CREATE TABLE IF NOT EXISTS journal_entries (
         id INTEGER PRIMARY KEY,
@@ -59,7 +71,12 @@ async function getDb(): Promise<SQLite.SQLiteDatabase> {
       CREATE INDEX IF NOT EXISTS idx_prayer_user
         ON prayer_requests(user_id, created_at DESC);
     `);
-    return db;
+      return db;
+    } catch (e) {
+      console.warn('[offlineDb] init failed, offline features disabled', e);
+      moduleAvailable = false;
+      return null;
+    }
   })();
   return dbPromise;
 }
@@ -71,6 +88,21 @@ async function getDb(): Promise<SQLite.SQLiteDatabase> {
 const newLocalId = (): number => Date.now() * 1000 + Math.floor(Math.random() * 1000);
 
 const toIsoNow = (): string => new Date().toISOString();
+
+/**
+ * Helper : exécute une fonction offline et catch toutes les erreurs.
+ * Retourne la valeur de fallback si le module SQLite n'est pas dispo.
+ */
+async function safe<T>(fallback: T, fn: () => Promise<T>): Promise<T> {
+  try {
+    if (!moduleAvailable) return fallback;
+    const result = await fn();
+    return result;
+  } catch (e) {
+    console.warn('[offlineDb] op failed', e);
+    return fallback;
+  }
+}
 
 /* --------------------------------------------------------------------------
  * CARNET (Journal)
@@ -95,13 +127,15 @@ export async function replaceJournal(
   userId: string,
   entries: Array<Omit<LocalJournalEntry, 'id' | '_sync_status' | '_local_updated_at'>>
 ): Promise<void> {
-  const db = await getDb();
-  await db.withTransactionAsync(async () => {
+  return safe(undefined, async () => {
+    const db = await getDb();
+    if (!db) return;
+    await db.withTransactionAsync(async () => {
     // 1. Récupère les server_id actuellement en local pour cet user
-    const existing = await db.getAllAsync<{ server_id: number | null; id: number }>(
+    const existing = (await db.getAllAsync(
       'SELECT id, server_id FROM journal_entries WHERE user_id = ?',
       [userId]
-    );
+    )) as Array<{ server_id: number | null; id: number }>;
     const serverIdsFromServer = new Set(entries.map((e) => e.server_id).filter(Boolean));
 
     // 2. Supprime celles qui ont disparu du serveur ET qui étaient synced
@@ -117,7 +151,7 @@ export async function replaceJournal(
     // 3. Upsert chaque entrée du serveur (toujours 'synced')
     for (const e of entries) {
       if (e.server_id == null) continue;
-      const existingRow = existing.find((r) => r.server_id === e.server_id);
+      const existingRow = existing.find((r: any) => r.server_id === e.server_id);
       if (existingRow) {
         await db.runAsync(
           `UPDATE journal_entries
@@ -135,19 +169,23 @@ export async function replaceJournal(
       }
     }
   });
+  });
 }
 
 /**
  * Lit toutes les entrées du carnet pour cet utilisateur.
  */
 export async function getJournal(userId: string): Promise<LocalJournalEntry[]> {
-  const db = await getDb();
-  return db.getAllAsync<LocalJournalEntry>(
-    `SELECT * FROM journal_entries
+  return safe([], async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.getAllAsync(
+      `SELECT * FROM journal_entries
       WHERE user_id = ?
       ORDER BY created_at DESC`,
-    [userId]
-  );
+      [userId]
+    );
+  });
 }
 
 /**
@@ -158,25 +196,38 @@ export async function createJournalEntry(
   content: string,
   tag: string
 ): Promise<LocalJournalEntry> {
-  const db = await getDb();
-  const localId = newLocalId();
-  const createdAt = toIsoNow();
-  await db.runAsync(
-    `INSERT INTO journal_entries
-      (id, server_id, user_id, content, tag, created_at, _sync_status)
-      VALUES (?, NULL, ?, ?, ?, ?, 'pending_create')`,
-    [localId, userId, content, tag, createdAt]
-  );
-  return {
-    id: localId,
+  const fallback: LocalJournalEntry = {
+    id: 0,
     server_id: null,
     user_id: userId,
     content,
     tag,
-    created_at: createdAt,
-    _sync_status: 'pending_create',
-    _local_updated_at: createdAt,
+    created_at: toIsoNow(),
+    _sync_status: 'synced',
+    _local_updated_at: toIsoNow(),
   };
+  return safe(fallback, async () => {
+    const db = await getDb();
+    if (!db) return fallback;
+    const localId = newLocalId();
+    const createdAt = toIsoNow();
+    await db.runAsync(
+      `INSERT INTO journal_entries
+        (id, server_id, user_id, content, tag, created_at, _sync_status)
+        VALUES (?, NULL, ?, ?, ?, ?, 'pending_create')`,
+      [localId, userId, content, tag, createdAt]
+    );
+    return {
+      id: localId,
+      server_id: null,
+      user_id: userId,
+      content,
+      tag,
+      created_at: createdAt,
+      _sync_status: 'pending_create',
+      _local_updated_at: createdAt,
+    };
+  });
 }
 
 /* --------------------------------------------------------------------------
@@ -199,12 +250,14 @@ export async function replacePrayers(
   userId: string,
   entries: Array<Omit<LocalPrayerRequest, 'id' | '_sync_status' | '_local_updated_at'>>
 ): Promise<void> {
-  const db = await getDb();
-  await db.withTransactionAsync(async () => {
-    const existing = await db.getAllAsync<{ server_id: number | null; id: number }>(
+  return safe(undefined, async () => {
+    const db = await getDb();
+    if (!db) return;
+    await db.withTransactionAsync(async () => {
+    const existing = (await db.getAllAsync(
       'SELECT id, server_id FROM prayer_requests WHERE user_id = ?',
       [userId]
-    );
+    )) as Array<{ server_id: number | null; id: number }>;
     const serverIdsFromServer = new Set(entries.map((e) => e.server_id).filter(Boolean));
 
     for (const row of existing) {
@@ -218,7 +271,7 @@ export async function replacePrayers(
 
     for (const e of entries) {
       if (e.server_id == null) continue;
-      const existingRow = existing.find((r) => r.server_id === e.server_id);
+      const existingRow = existing.find((r: any) => r.server_id === e.server_id);
       if (existingRow) {
         await db.runAsync(
           `UPDATE prayer_requests
@@ -236,56 +289,77 @@ export async function replacePrayers(
       }
     }
   });
+  });
 }
 
 export async function getPrayers(userId: string): Promise<LocalPrayerRequest[]> {
-  const db = await getDb();
-  return db.getAllAsync<LocalPrayerRequest>(
-    `SELECT * FROM prayer_requests
+  return safe([], async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.getAllAsync(
+      `SELECT * FROM prayer_requests
       WHERE user_id = ?
       ORDER BY created_at DESC`,
-    [userId]
-  );
+      [userId]
+    );
+  });
 }
 
 export async function createPrayerRequest(
   userId: string,
   requestText: string
 ): Promise<LocalPrayerRequest> {
-  const db = await getDb();
-  const localId = newLocalId();
-  const createdAt = toIsoNow();
-  await db.runAsync(
-    `INSERT INTO prayer_requests
-      (id, server_id, user_id, request_text, is_fulfilled, fulfilled_at, created_at, _sync_status)
-      VALUES (?, NULL, ?, ?, 0, NULL, ?, 'pending_create')`,
-    [localId, userId, requestText, createdAt]
-  );
-  return {
-    id: localId,
+  const fallback: LocalPrayerRequest = {
+    id: 0,
     server_id: null,
     user_id: userId,
     request_text: requestText,
     is_fulfilled: 0,
     fulfilled_at: null,
-    created_at: createdAt,
-    _sync_status: 'pending_create',
-    _local_updated_at: createdAt,
+    created_at: toIsoNow(),
+    _sync_status: 'synced',
+    _local_updated_at: toIsoNow(),
   };
+  return safe(fallback, async () => {
+    const db = await getDb();
+    if (!db) return fallback;
+    const localId = newLocalId();
+    const createdAt = toIsoNow();
+    await db.runAsync(
+      `INSERT INTO prayer_requests
+        (id, server_id, user_id, request_text, is_fulfilled, fulfilled_at, created_at, _sync_status)
+        VALUES (?, NULL, ?, ?, 0, NULL, ?, 'pending_create')`,
+      [localId, userId, requestText, createdAt]
+    );
+    return {
+      id: localId,
+      server_id: null,
+      user_id: userId,
+      request_text: requestText,
+      is_fulfilled: 0,
+      fulfilled_at: null,
+      created_at: createdAt,
+      _sync_status: 'pending_create',
+      _local_updated_at: createdAt,
+    };
+  });
 }
 
 export async function markPrayerFulfilled(localId: number): Promise<void> {
-  const db = await getDb();
-  const fulfilledAt = toIsoNow();
-  await db.runAsync(
-    `UPDATE prayer_requests
-        SET is_fulfilled = 1,
-            fulfilled_at = ?,
-            _sync_status = CASE WHEN server_id IS NULL THEN 'pending_update' ELSE 'pending_update' END,
-            _local_updated_at = ?
-      WHERE id = ?`,
-    [fulfilledAt, fulfilledAt, localId]
-  );
+  return safe(undefined, async () => {
+    const db = await getDb();
+    if (!db) return;
+    const fulfilledAt = toIsoNow();
+    await db.runAsync(
+      `UPDATE prayer_requests
+          SET is_fulfilled = 1,
+              fulfilled_at = ?,
+              _sync_status = CASE WHEN server_id IS NULL THEN 'pending_update' ELSE 'pending_update' END,
+              _local_updated_at = ?
+        WHERE id = ?`,
+      [fulfilledAt, fulfilledAt, localId]
+    );
+  });
 }
 
 /* --------------------------------------------------------------------------
@@ -302,25 +376,28 @@ export interface PendingOp {
  * Récupère toutes les opérations en attente de sync.
  */
 export async function getPendingOps(): Promise<PendingOp[]> {
-  const db = await getDb();
-  const journalPending = await db.getAllAsync<{ id: number }>(
-    "SELECT id FROM journal_entries WHERE _sync_status IN ('pending_create', 'pending_update')"
-  );
-  const prayerPending = await db.getAllAsync<{ id: number }>(
-    "SELECT id FROM prayer_requests WHERE _sync_status IN ('pending_create', 'pending_update')"
-  );
-  return [
-    ...journalPending.map((r) => ({
-      table: 'journal_entries' as const,
-      localId: r.id,
-      op: 'create' as const,
-    })),
-    ...prayerPending.map((r) => ({
-      table: 'prayer_requests' as const,
-      localId: r.id,
-      op: 'create' as const,
-    })),
-  ];
+  return safe([], async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const journalPending = (await db.getAllAsync(
+      "SELECT id FROM journal_entries WHERE _sync_status IN ('pending_create', 'pending_update')"
+    )) as Array<{ id: number }>;
+    const prayerPending = (await db.getAllAsync(
+      "SELECT id FROM prayer_requests WHERE _sync_status IN ('pending_create', 'pending_update')"
+    )) as Array<{ id: number }>;
+    return [
+      ...journalPending.map((r: any) => ({
+        table: 'journal_entries' as const,
+        localId: r.id,
+        op: 'create' as const,
+      })),
+      ...prayerPending.map((r: any) => ({
+        table: 'prayer_requests' as const,
+        localId: r.id,
+        op: 'create' as const,
+      })),
+    ];
+  });
 }
 
 /**
@@ -331,27 +408,33 @@ export async function markSynced(
   localId: number,
   serverId: number
 ): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(
-    `UPDATE ${table}
-        SET server_id = ?, _sync_status = 'synced'
-      WHERE id = ?`,
-    [serverId, localId]
-  );
+  return safe(undefined, async () => {
+    const db = await getDb();
+    if (!db) return;
+    await db.runAsync(
+      `UPDATE ${table}
+          SET server_id = ?, _sync_status = 'synced'
+        WHERE id = ?`,
+      [serverId, localId]
+    );
+  });
 }
 
 /**
  * Compte le nombre d'éléments en attente (pour l'indicateur UI).
  */
 export async function countPending(): Promise<number> {
-  const db = await getDb();
-  const journal = await db.getFirstAsync<{ c: number }>(
-    "SELECT COUNT(*) as c FROM journal_entries WHERE _sync_status IN ('pending_create', 'pending_update')"
-  );
-  const prayer = await db.getFirstAsync<{ c: number }>(
-    "SELECT COUNT(*) as c FROM prayer_requests WHERE _sync_status IN ('pending_create', 'pending_update')"
-  );
-  return (journal?.c ?? 0) + (prayer?.c ?? 0);
+  return safe(0, async () => {
+    const db = await getDb();
+    if (!db) return 0;
+    const journal = (await db.getFirstAsync(
+      "SELECT COUNT(*) as c FROM journal_entries WHERE _sync_status IN ('pending_create', 'pending_update')"
+    )) as { c: number } | null;
+    const prayer = (await db.getFirstAsync(
+      "SELECT COUNT(*) as c FROM prayer_requests WHERE _sync_status IN ('pending_create', 'pending_update')"
+    )) as { c: number } | null;
+    return (journal?.c ?? 0) + (prayer?.c ?? 0);
+  });
 }
 
 /* --------------------------------------------------------------------------

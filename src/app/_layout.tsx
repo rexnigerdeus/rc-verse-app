@@ -3,7 +3,8 @@ import { useFonts } from "expo-font";
 import { useEffect } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { AuthProvider, useAuth } from "../providers/AuthProvider";
-import { ThemeProvider, useTheme } from "../providers/ThemeProvider"; 
+import { ThemeProvider, useTheme } from "../providers/ThemeProvider";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import Head from "expo-router/head";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -62,11 +63,13 @@ function InitialLayout() {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider> 
-      <AuthProvider>
-        <RootLayoutContent />
-      </AuthProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <RootLayoutContent />
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

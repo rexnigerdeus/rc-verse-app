@@ -19,12 +19,34 @@ function TabBarIcon(props: {
 }
 
 export default function AppLayout() {
-  useNotifications();
-  useStreakNotifications();
   const { session, loading } = useAuth();
-  // Sync queue globale : drain la file dès qu'on a un user connecté.
-  useSyncQueue({ userId: session?.user?.id });
-  
+
+  // Les hooks offline (useStreakNotifications, useSyncQueue) sont importés
+  // dynamiquement via require() pour qu'ils ne soient JAMAIS évalués si
+  // l'utilisateur n'est pas connecté. Cela évite tout crash iOS natif au boot
+  // si le module expo-sqlite n'est pas encore lié (cf. crash logs TestFlight).
+  // En cas de crash d'import, on catch et on continue avec un fallback no-op.
+
+  // Hooks toujours actifs (pas de dépendance native lourde) :
+  useNotifications();
+
+  // Hooks offline : activés seulement quand un user est connecté
+  if (session?.user?.id) {
+    try {
+      // require dynamique pour différer l'évaluation jusqu'à l'activation
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useStreakNotifications } = require("../../hooks/useStreakNotifications");
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useSyncQueue } = require("../../hooks/useSyncQueue");
+      useStreakNotifications();
+      useSyncQueue({ userId: session.user.id });
+    } catch (e) {
+      // Si les modules offline crashent au boot (module natif manquant),
+      // on logge mais on n'empêche pas l'app de fonctionner.
+      console.warn('[AppLayout] Offline hooks failed to init', e);
+    }
+  }
+
   const { colors, isDark } = useTheme(); 
 
   useEffect(() => {

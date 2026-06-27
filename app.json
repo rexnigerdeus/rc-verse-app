@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.revivalculture.monquotidien",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "CFBundleDisplayName": "Mon Quotidien",
         "NSCameraUsageDescription": "This app uses the camera to scan for...",
@@ -55,7 +55,9 @@
       "expo-font",
       "expo-sqlite",
       "expo-asset",
-      "expo-audio"
+      "expo-audio",
+      "expo-file-system",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true

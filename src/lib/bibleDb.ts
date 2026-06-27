@@ -11,10 +11,10 @@
 //
 // Schéma compatible avec les codes de version utilisés dans bible.tsx
 // (ex: 'FRLSG' → LSG1910 dans la base).
-
-import { Asset } from 'expo-asset';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as SQLite from 'expo-sqlite';
+//
+// ⚠️ IMPORTANT : ce module est lazy-loaded. Les imports dynamiques (Asset,
+// FileSystem, SQLite) sont faits UNIQUEMENT dans getDb() pour éviter que
+// le require() top-level du .sqlite fasse crasher l'app au boot sur iOS natif.
 
 const DB_NAME = 'bibles.db';
 
@@ -40,35 +40,67 @@ export interface LocalBook {
   name: string;
 }
 
-let dbReady: Promise<SQLite.SQLiteDatabase> | null = null;
+let dbReady: Promise<any> | null = null;
 
 /**
  * Initialise et retourne l'instance de la base locale.
- * Au premier appel : copie assets/database/merged_bibles.sqlite vers
- * le répertoire de documents (expo-sqlite ne peut pas lire depuis assets).
+ * Au premier appel : importe les modules natifs et copie la base depuis assets.
+ * Lazy-load pour éviter les crashs iOS natif au boot.
  */
-async function getDb(): Promise<SQLite.SQLiteDatabase> {
+async function getDb(): Promise<any> {
   if (dbReady) return dbReady;
 
   dbReady = (async () => {
+    // Imports dynamiques : ne s'exécutent qu'au premier accès à la Bible,
+    // pas au démarrage de l'app.
+    const [{ Asset }, FileSystem, SQLite] = await Promise.all([
+      import('expo-asset'),
+      import('expo-file-system/legacy'),
+      import('expo-sqlite'),
+    ]);
+
     // 1. Chemin cible dans le sandbox de l'app
-    const targetPath = `${FileSystem.documentDirectory}${DB_NAME}`;
+    const docDir = FileSystem.documentDirectory ?? '';
+    const targetPath = `${docDir}${DB_NAME}`;
     const targetUri = targetPath.startsWith('file://') ? targetPath : `file://${targetPath}`;
 
     // 2. Vérifier si déjà copiée
-    const info = await FileSystem.getInfoAsync(targetUri);
-    if (!info.exists) {
+    let exists = false;
+    try {
+      const info = await FileSystem.getInfoAsync(targetUri);
+      exists = !!info?.exists;
+    } catch {
+      exists = false;
+    }
+
+    if (!exists) {
       // 3. Charger l'asset bundled et le copier
-      const asset = Asset.fromModule(require('../../assets/database/merged_bibles.sqlite'));
-      await asset.downloadAsync();
-      if (!asset.localUri) {
-        throw new Error('[bibleDb] Impossible de charger merged_bibles.sqlite depuis assets');
+      try {
+        const asset = Asset.fromModule(require('../../assets/database/merged_bibles.sqlite'));
+        // Sur iOS natif, downloadAsync peut crasher si l'asset n'est pas dans le bundle.
+        // On évite cet appel pour les assets bundled : localUri est déjà défini.
+        if (!asset.localUri) {
+          await asset.downloadAsync();
+        }
+        const sourceUri = asset.localUri;
+        if (!sourceUri) {
+          console.warn('[bibleDb] Asset localUri indisponible');
+          return null;
+        }
+        await FileSystem.copyAsync({ from: sourceUri, to: targetUri });
+      } catch (e) {
+        console.warn('[bibleDb] Copy failed', e);
+        return null;
       }
-      await FileSystem.copyAsync({ from: asset.localUri, to: targetUri });
     }
 
     // 4. Ouvrir la base (expo-sqlite résout le chemin iOS/Android)
-    return SQLite.openDatabaseAsync(DB_NAME);
+    try {
+      return await SQLite.openDatabaseAsync(DB_NAME);
+    } catch (e) {
+      console.warn('[bibleDb] openDatabaseAsync failed', e);
+      return null;
+    }
   })();
 
   return dbReady;
@@ -85,17 +117,18 @@ export async function getChapterLocal(
 ): Promise<LocalVerse[]> {
   const localCode = VERSION_MAP[versionCode] ?? 'LSG1910';
   const db = await getDb();
+  if (!db) return [];
 
   // Récupère translation_id
-  const translationRows = await db.getAllAsync<{ id: number }>(
+  const translationRows = await db.getAllAsync(
     'SELECT id FROM translations WHERE code = ?',
     [localCode]
-  );
+  ) as Array<{ id: number }>;
   if (translationRows.length === 0) return [];
   const translationId = translationRows[0].id;
 
   // Récupère les versets du chapitre
-  const rows = await db.getAllAsync<{ verse: number; text: string }>(
+  const rows = await db.getAllAsync(
     `SELECT verse, text
        FROM verses
       WHERE translation_id = ?
@@ -103,12 +136,12 @@ export async function getChapterLocal(
         AND chapter = ?
       ORDER BY verse ASC`,
     [translationId, bookNumber, chapter]
-  );
+  ) as Array<{ verse: number; text: string }>;
 
   // Nettoie le texte (la base contient parfois ¶, [], etc.)
-  return rows.map((r) => ({
+  return rows.map((r: any) => ({
     verse: r.verse,
-    text: r.text
+    text: String(r.text ?? '')
       .replace(/¶/g, '')
       .replace(/\[/g, '')
       .replace(/\]/g, '')
@@ -121,10 +154,11 @@ export async function getChapterLocal(
  */
 export async function getBookNameLocal(bookNumber: number): Promise<string | null> {
   const db = await getDb();
-  const rows = await db.getAllAsync<{ name: string }>(
+  if (!db) return null;
+  const rows = await db.getAllAsync(
     'SELECT name FROM books WHERE id = ?',
     [bookNumber]
-  );
+  ) as Array<{ name: string }>;
   return rows[0]?.name ?? null;
 }
 
